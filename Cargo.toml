@@ -2,5 +2,14 @@
 name = "revdeprun"
 version = "0.1.0"
 edition = "2024"
+description = "One-key reverse dependency checks for R via revdepcheck with cloud-ready environment setup"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/nanxstats/revdeprun"
+documentation = "https://docs.rs/revdeprun"
+keywords = ["R packages", "integration testing", "reserve dependency", "revdepcheck"]
+categories = ["command-line-utilities", "development-tools"]
+rust-version = "1.85"
+authors = ["Nan Xiao <me@nanx.me>"]
 
 [dependencies]
