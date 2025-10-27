@@ -39,6 +39,9 @@ From GitHub (latest development version):
 cargo install --git https://github.com/nanxstats/revdeprun.git
 ```
 
+**Note**: If `cargo` or `revdeprun` is not found immediately after installation,
+restart your shell.
+
 ## Environment
 
 Currently, this tool is designed for Ubuntu-based systems and requires:
