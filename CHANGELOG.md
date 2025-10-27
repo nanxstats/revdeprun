@@ -2,10 +2,10 @@
 
 ## revdeprun 0.1.0
 
-### Added
+### New features
 
 - Initial public release of the `revdeprun` CLI.
-- Automated Ubuntu R installer leveraging the R-hub version resolution API.
-- End-to-end workflow that clones an R package repository and runs `revdepcheck`
-  with configurable worker count.
+- Automated Ubuntu R installer using the R-hub version resolution API.
+- Implemented workflow that clones an R package repository and runs
+  revdepcheck with configurable worker numbers.
 - Support for custom workspaces, version overrides, and reusing pre-installed R.
