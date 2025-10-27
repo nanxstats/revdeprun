@@ -8,6 +8,14 @@ One-key reverse dependency checks for R via revdepcheck with cloud-ready environ
 
 ## Installation
 
+Install build-essential:
+
+```bash
+sudo apt-get update && sudo apt-get install build-essential
+```
+
+[Install Rust](https://rust-lang.org/tools/install/).
+
 Install `revdeprun` from crates.io using Cargo:
 
 ```bash
