@@ -8,10 +8,12 @@ One-key reverse dependency checks for R via revdepcheck with cloud-ready environ
 
 ## Installation
 
-Install build-essential:
+Install system dependencies for building Rust crates
+and building R package dependencies of revdepcheck:
 
 ```bash
-sudo apt-get update && sudo apt-get install build-essential
+sudo apt-get update
+sudo apt-get install -y build-essential libssl-dev libcurl4-openssl-dev
 ```
 
 [Install Rust](https://rust-lang.org/tools/install/).
