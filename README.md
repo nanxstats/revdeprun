@@ -8,18 +8,17 @@ Easy reverse dependency checks for R via revdepcheck with cloud-ready environmen
 
 ## Installation
 
-Install system dependencies for building Rust crates and building R package
-dependencies of revdepcheck:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y build-essential libssl-dev libcurl4-openssl-dev
-```
-
 Install Rust with rustup:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Install a C compiler which include a linker that Rust needs:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential
 ```
 
 Install `revdeprun` from crates.io using Cargo:

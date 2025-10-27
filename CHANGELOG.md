@@ -1,5 +1,12 @@
 # Changelog
 
+## revdeprun 0.2.0
+
+### Improvements
+
+- Install `libcurl4-openssl-dev` and `libssl-dev` automatically, which are required by
+  openssl and curl, dependencies of revdepcheck (#4).
+
 ## revdeprun 0.1.0
 
 ### New features
