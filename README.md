@@ -4,90 +4,132 @@
 [![CI tests](https://github.com/nanxstats/revdeprun/actions/workflows/ci.yml/badge.svg)](https://github.com/nanxstats/revdeprun/actions/workflows/ci.yml)
 ![License](https://img.shields.io/crates/l/revdeprun)
 
-Easy reverse dependency checks for R via revdepcheck with cloud-ready environment setup.
+A command-line tool that automates reverse dependency checking for R packages.
+Provision R on Ubuntu, configure environment context, and run revdepcheck
+in a single command. Designed for cloud environments where you need
+reproducible, isolated test runs without tedious manual setup.
 
 ## Installation
 
-Install Rust with rustup:
+### Prerequisites
+
+Install Rust:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-Install a C compiler which include a linker that Rust needs:
+Install C compiler and linker:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y build-essential
+sudo apt-get update && sudo apt-get install -y build-essential
 ```
 
-Install `revdeprun` from crates.io using Cargo:
+### Install revdeprun
+
+From crates.io (stable release):
 
 ```bash
 cargo install revdeprun
 ```
 
-To try the latest development version directly from GitHub:
+From GitHub (latest development version):
 
 ```bash
 cargo install --git https://github.com/nanxstats/revdeprun.git
 ```
 
-## Requirements
+## Environment
 
-- Ubuntu 20.04 or newer.
-- Git available on `PATH`.
-- Network access to download R, R packages, and the Git repository.
-- `sudo` access for `apt-get`, `gdebi`, and system-wide `/opt/R` installation.
+Currently, this tool is designed for Ubuntu-based systems and requires:
 
-Running inside a fresh, one-off cloud instance is strongly recommended because
-reverse dependency checks execute third-party code.
+- Operating system: Ubuntu 20.04 or newer
+- Version control: Git on `PATH`
+- Network access: To download R, R packages, and repository
+- Elevated privileges: `sudo` access for installing system dependencies and R
+
+Security note: Reverse dependency checks execute arbitrary third-party code.
+Run `revdeprun` in temporary, isolated environments such as disposable cloud
+instances or containers.
 
 ## Usage
 
-The CLI provisions the R toolchain, sets the package repository,
-and runs revdepcheck:
+Simply point `revdeprun` at your package repository:
 
 ```bash
 revdeprun https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
 ```
 
-By default, the current release version of R for Ubuntu is installed
-and the number of workers is set to use all available CPU cores.
+The tool installs the current release version of R for Ubuntu and configures
+revdepcheck to use all available CPU cores by default. Results are written
+to `revdep/` within your repository directory.
 
-### Command options
+### Command-line options
 
 ```
-$ revdeprun --help
-Provision R and run revdepcheck end-to-end
-
 Usage: revdeprun [OPTIONS] <REPOSITORY>
 
 Arguments:
-  <REPOSITORY>  Git URL or filesystem path pointing to the target R package repository
+  <REPOSITORY>
+          Git URL or filesystem path to the target R package repository
 
 Options:
-      --r-version <R_VERSION>  R version specification to install (e.g. release, 4.3.3, oldrel-1) [default: release]
-      --num-workers <N>        Number of parallel workers to pass to revdepcheck
-      --work-dir <WORK_DIR>    Optional workspace directory where temporary files are created
-      --skip-r-install         Skip installing R and reuse the system-wide installation
-  -h, --help                   Print help
-  -V, --version                Print version
+      --r-version <R_VERSION>
+          R version to install: release, oldrel-1, or exact version (e.g., 4.3.3)
+          [default: release]
+
+      --num-workers <N>
+          Number of parallel workers for revdepcheck
+          [default: number of CPU cores]
+
+      --work-dir <WORK_DIR>
+          Workspace directory for temporary files and cloned repositories
+
+      --skip-r-install
+          Skip R installation and use the existing system-wide R
+
+  -h, --help
+          Print help information
+
+  -V, --version
+          Print version information
 ```
 
-### Typical workflow
+## Example workflows
 
-1. Provision a clean Ubuntu VM with sufficient CPU and memory.
-2. Install `revdeprun` (for example, `cargo install revdeprun`).
-3. Run `revdeprun <repo>` with optional flags, such as:
-   - `revdeprun --r-version release https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git`
-   - `revdeprun --num-workers 48 --work-dir /data/workspace git@github.com:YOUR-USERNAME/YOUR-REPOSITORY.git`
-4. Review the results under `<repo>/revdep`.
+Standard check on a remote repository:
 
-### Notes
+```bash
+revdeprun https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
+```
 
-- `revdeprun` installs R into `/opt/R/...` and symlinks binaries to `/usr/local/bin`.
-- The tool uses the latest development version of revdepcheck from GitHub.
-- If you already provision R and required packages, pass `--skip-r-install`.
-- To point at a local checkout instead of cloning, supply the path directly:
-  `revdeprun ~/workspace/YOUR-REPOSITORY`.
+Specify [R version](https://github.com/r-lib/actions/tree/v2-branch/setup-r)
+and parallelism:
+
+```bash
+revdeprun --r-version devel --num-workers 48 \
+  https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
+```
+
+Use a custom workspace and SSH authentication:
+
+```bash
+revdeprun --work-dir /data/workspace \
+  git@github.com:YOUR-USERNAME/YOUR-REPOSITORY.git
+```
+
+Check a local directory:
+
+```bash
+revdeprun ~/workspace/YOUR-REPOSITORY
+```
+
+Use an existing R installation:
+
+```bash
+revdeprun --skip-r-install https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
+```
+
+## License
+
+This project is licensed under the MIT License.
