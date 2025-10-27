@@ -9,7 +9,7 @@
 
 ### Documentation
 
-- Improved `README.md` for clarity (#5).
+- Improved `README.md` for clarity (#5, #6).
 
 ## revdeprun 0.1.0
 
