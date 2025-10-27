@@ -60,13 +60,13 @@ Provision R and run revdepcheck end-to-end
 Usage: revdeprun [OPTIONS] <REPOSITORY>
 
 Arguments:
-  <REPOSITORY>  Git URL or path to the R package you want to check
+  <REPOSITORY>  Git URL or filesystem path pointing to the target R package repository
 
 Options:
-      --r-version <R_VERSION>  R version spec (e.g. release, 4.3.3, oldrel-1) [default: release]
-      --num-workers <N>        Override parallel worker count (defaults to host CPUs)
-      --work-dir <PATH>        Custom workspace directory for clones and temp files
-      --skip-r-install         Reuse an existing system R instead of installing
+      --r-version <R_VERSION>  R version specification to install (e.g. release, 4.3.3, oldrel-1) [default: release]
+      --num-workers <N>        Number of parallel workers to pass to revdepcheck
+      --work-dir <WORK_DIR>    Optional workspace directory where temporary files are created
+      --skip-r-install         Skip installing R and reuse the system-wide installation
   -h, --help                   Print help
   -V, --version                Print version
 ```
