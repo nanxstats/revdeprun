@@ -87,14 +87,21 @@ options(
 )
 Sys.setenv(NOT_CRAN = "true")
 
+user_lib <- Sys.getenv("R_LIBS_USER")
+if (!nzchar(user_lib)) {{
+  stop('R_LIBS_USER is empty; cannot install packages into user library')
+}}
+dir.create(user_lib, recursive = TRUE, showWarnings = FALSE)
+.libPaths(c(user_lib, .libPaths()))
+
 if (!requireNamespace("BiocManager", quietly = TRUE)) {{
-  install.packages("BiocManager", repos = "https://cloud.r-project.org/")
+  install.packages("BiocManager", repos = "https://cloud.r-project.org/", lib = user_lib)
 }}
 if (!requireNamespace("remotes", quietly = TRUE)) {{
-  install.packages("remotes", repos = "https://cloud.r-project.org/")
+  install.packages("remotes", repos = "https://cloud.r-project.org/", lib = user_lib)
 }}
 if (!requireNamespace("revdepcheck", quietly = TRUE)) {{
-  remotes::install_github("r-lib/revdepcheck", upgrade = "never")
+  remotes::install_github("r-lib/revdepcheck", lib = user_lib, upgrade = "never")
 }}
 
 Sys.setenv(R_BIOC_VERSION = as.character(BiocManager::version()))
@@ -118,5 +125,7 @@ mod tests {
         assert!(script.contains("revdepcheck::revdep_check"));
         assert!(script.contains("num_workers = 8"));
         assert!(script.contains("setwd('/tmp/example')"));
+        assert!(script.contains(".libPaths(c(user_lib, .libPaths()))"));
+        assert!(script.contains("lib = user_lib"));
     }
 }
