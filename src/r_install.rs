@@ -126,7 +126,7 @@ fn file_name_from_url(url: &str) -> Result<String> {
         reqwest::Url::parse(url).with_context(|| format!("failed to parse download URL {url}"))?;
     parsed
         .path_segments()
-        .and_then(|segments| segments.last())
+        .and_then(|mut segments| segments.next_back())
         .filter(|segment| !segment.is_empty())
         .map(|segment| segment.to_string())
         .ok_or_else(|| anyhow::anyhow!("failed to extract file name from {url}"))
