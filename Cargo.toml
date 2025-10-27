@@ -13,3 +13,10 @@ rust-version = "1.85"
 authors = ["Nan Xiao <me@nanx.me>"]
 
 [dependencies]
+anyhow = "1.0.100"
+clap = { version = "4.5.50", features = ["derive"] }
+num_cpus = "1.17.0"
+reqwest = { version = "0.12.24", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1.0.228", features = ["derive"] }
+tempfile = "3.23.0"
+xshell = "0.2.7"
