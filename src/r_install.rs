@@ -52,7 +52,14 @@ fn install_prerequisites(shell: &Shell) -> Result<()> {
         "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y gdebi-core qpdf devscripts ghostscript"
     )
     .run()
-    .context("apt-get install failed")?;
+    .context("apt-get install of core packages failed")?;
+
+    cmd!(
+        shell,
+        "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y libcurl4-openssl-dev libssl-dev"
+    )
+    .run()
+    .context("apt-get install of revdepcheck dependencies failed")?;
 
     Ok(())
 }
