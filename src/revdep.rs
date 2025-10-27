@@ -82,8 +82,7 @@ fn build_revdep_script(repo_path: &Path, num_workers: usize) -> Result<String> {
 setwd({path_literal})
 options(
   repos = "https://cloud.r-project.org/",
-  BioC_mirror = "https://packagemanager.posit.co/bioconductor",
-  Ncpus = {workers}
+  BioC_mirror = "https://packagemanager.posit.co/bioconductor"
 )
 Sys.setenv(NOT_CRAN = "true")
 
