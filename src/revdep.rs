@@ -101,7 +101,7 @@ if (!requireNamespace("remotes", quietly = TRUE)) {{
   install.packages("remotes", repos = "https://cloud.r-project.org/", lib = user_lib)
 }}
 if (!requireNamespace("revdepcheck", quietly = TRUE)) {{
-  remotes::install_github("r-lib/revdepcheck", lib = user_lib, upgrade = "never")
+  remotes::install_github("r-lib/revdepcheck", lib = user_lib, upgrade = "never", Ncpus = {workers})
 }}
 
 Sys.setenv(R_BIOC_VERSION = as.character(BiocManager::version()))
