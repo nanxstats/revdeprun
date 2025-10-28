@@ -40,6 +40,8 @@ fn is_r_already_installed(shell: &Shell, version: &ResolvedRVersion) -> Result<b
 }
 
 fn install_prerequisites(shell: &Shell) -> Result<()> {
+    disable_man_db_auto_update(shell).context("failed to disable man-db auto updates")?;
+
     cmd!(
         shell,
         "sudo env DEBIAN_FRONTEND=noninteractive apt-get update -y -qq"
@@ -60,6 +62,21 @@ fn install_prerequisites(shell: &Shell) -> Result<()> {
     )
     .run()
     .context("apt-get install of revdepcheck dependencies failed")?;
+
+    Ok(())
+}
+
+fn disable_man_db_auto_update(shell: &Shell) -> Result<()> {
+    cmd!(shell, "sudo debconf-communicate")
+        .run()
+        .context("debconf-communicate failed for man-db")?;
+
+    cmd!(
+        shell,
+        "sudo env DEBIAN_FRONTEND=noninteractive dpkg-reconfigure man-db"
+    )
+    .run()
+    .context("dpkg-reconfigure of man-db failed")?;
 
     Ok(())
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## revdeprun 0.3.0
+
+### Improvements
+
+- Disable `man-db` auto updates before calling apt-based installation steps
+  to reduce potential setup overhead (#9).
+
 ## revdeprun 0.2.0
 
 ### Improvements
