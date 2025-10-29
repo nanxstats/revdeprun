@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Improvements
+
+- Install Quarto and TinyTeX with `PATH` updates so `.qmd` and PDF
+  vignettes can render during reverse dependency checks.
+
 ## revdeprun 0.4.0
 
 ### Bug fixes
