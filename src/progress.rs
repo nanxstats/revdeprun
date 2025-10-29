@@ -53,11 +53,6 @@ impl Progress {
     {
         self.multi.suspend(operation)
     }
-
-    /// Finishes all active tasks, clearing their display rows.
-    pub fn clear(&self) {
-        self.multi.clear().ok();
-    }
 }
 
 /// Spinner-style progress task returned by [`Progress::task`].
@@ -67,19 +62,7 @@ pub struct Task {
     finished: bool,
 }
 
-#[allow(dead_code)]
 impl Task {
-    /// Updates the spinner message while it is still in progress.
-    pub fn set_message(&self, message: impl Into<String>) {
-        self.bar.set_message(message.into());
-    }
-
-    /// Marks the task as successfully completed.
-    pub fn success(self) {
-        let message = format!("{} (done)", self.label);
-        self.finish_with_message(message);
-    }
-
     /// Marks the task as successfully completed with a custom trailing message.
     pub fn finish_with_message(mut self, message: impl Into<String>) {
         self.finished = true;
