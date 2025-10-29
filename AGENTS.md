@@ -17,7 +17,9 @@ dependency checks for R packages.
   `/usr/local/bin` symlinks with `xshell`. Assume Ubuntu-only environments.
 - `src/revdep.rs` clones repositories, writes a bootstrap R script, and runs
   `revdepcheck::revdep_check`. Keep the script deterministic and avoid editing
-  user repositories outside `revdep/`.
+  user repositories outside `revdep/`. The revdep flow uses two scripts:
+  one quiet bootstrap script for installing dependencies and a second script
+  that runs `revdepcheck`, so only the interactive phase reaches stdout.
 - `src/workspace.rs` manages per-run directories. Respect user-provided
   workspaces without deleting their content.
 - `src/util.rs` holds shared helpers; keep it small and well-tested.
