@@ -2,10 +2,20 @@
 
 ## revdeprun 0.3.0
 
-### Improvements
+### Speed optimization
 
 - `revdep.rs` now sets `options(Ncpus = workers)` so the dependency compilation
-  phase can also use all available cores (#12).
+  phase can also use all available CPU cores (#12).
+
+### Compact terminal output
+
+- Progress for R and R package installation, workspace preparation, and
+  repository cloning is now presented with compact spinners
+  using `indicatif` (#13).
+  - Suppress revdepcheck bootstrap logs from R dependency installation.
+    They will only surface when something fails.
+  - Once revdepcheck dependencies are bootstrapped, only the interactive
+    `revdepcheck` session streams to stdout.
 
 ## revdeprun 0.2.0
 
