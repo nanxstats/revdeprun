@@ -10,6 +10,11 @@
   Also, increased the `revdepcheck::revdep_check()` timeout to 12 hours
   to accommodate longer installation and reverse dependency checks.
 
+### Improvements
+
+- Install `pandoc` by default so R package vignettes can build during
+  reverse dependency checks.
+
 ## revdeprun 0.3.0
 
 ### Speed optimization
