@@ -238,31 +238,7 @@ fn script_prelude(repo_path: &Path, num_workers: usize) -> String {
         r#"
 setwd({path_literal})
 
-detect_codename <- function() {{
-  release <- tryCatch(readLines("/etc/os-release"), error = function(e) character())
-  entry <- release[startsWith(release, "VERSION_CODENAME=")]
-  if (length(entry) > 0) {{
-    value <- sub("^VERSION_CODENAME=", "", entry)
-    value <- value[nzchar(value)]
-    if (length(value) > 0) {{
-      return(value[[1]])
-    }}
-  }}
-
-  lsb <- tryCatch(system("lsb_release -cs", intern = TRUE), error = function(e) character())
-  lsb <- lsb[nzchar(lsb)]
-  if (length(lsb) > 0) {{
-    return(lsb[[1]])
-  }}
-
-  stop("Unable to determine Ubuntu codename for selecting CRAN binary repo")
-}}
-
-ubuntu_codename <- detect_codename()
-cran_repo <- sprintf(
-  "https://packagemanager.posit.co/cran/__linux__/%s/latest",
-  ubuntu_codename
-)
+cran_repo <- "https://cloud.r-project.org/"
 
 options(
   repos = c(CRAN = cran_repo),
@@ -294,7 +270,7 @@ mod tests {
         assert!(script.contains("quiet = TRUE"));
         assert!(script.contains("remotes::install_github"));
         assert!(script.contains("repos = getOption(\"repos\")"));
-        assert!(script.contains("https://packagemanager.posit.co/cran/__linux__/"));
+        assert!(script.contains("https://cloud.r-project.org/"));
     }
 
     #[test]
@@ -308,7 +284,6 @@ mod tests {
         assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains(".libPaths(c(user_lib, .libPaths()))"));
         assert!(script.contains("revdepcheck::revdep_reset"));
-        assert!(script.contains("detect_codename <- function()"));
-        assert!(script.contains("https://packagemanager.posit.co/cran/__linux__/"));
+        assert!(script.contains("https://cloud.r-project.org/"));
     }
 }
