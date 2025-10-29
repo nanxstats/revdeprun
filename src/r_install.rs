@@ -76,7 +76,7 @@ fn install_prerequisites(shell: &Shell, progress: &Progress) -> Result<()> {
         "base R prerequisites installed",
         cmd!(
             shell,
-            "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y gdebi-core qpdf devscripts ghostscript"
+            "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y gdebi-core qpdf devscripts ghostscript pandoc"
         ),
     )?;
 
