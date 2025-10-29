@@ -6,8 +6,7 @@
 
 - Increased the `revdepcheck::revdep_check()` timeout to 12 hours to
   accommodate longer installation and reverse dependency checks.
-  The scripts now also use Posit Public Package Manager source package
-  repositories based on the detected Ubuntu codename.
+  Keep using the source package mirror so that revdepcheck can run.
 
 ### Improvements
 
