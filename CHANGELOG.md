@@ -5,13 +5,18 @@
 ### Bug fixes
 
 - Increased the `revdepcheck::revdep_check()` timeout to 12 hours to
-  accommodate longer installation and reverse dependency checks.
-  Keep using the source package mirror so that revdepcheck can run.
+  accommodate longer installation and reverse dependency checks (#25).
+  Keep using the source package mirror so that revdepcheck can run (#28, #30).
 
 ### Improvements
 
 - Install `pandoc` by default so R package vignettes can build during
-  reverse dependency checks.
+  reverse dependency checks (#26).
+- Set `revdepcheck::revdep_check(bioc = FALSE)` to follow the default
+  behavior of `revdepcheck::cloud_check()` on **not** checking Bioconductor
+  packages by default (#20).
+- Set `revdepcheck::revdep_check(quiet = TRUE)` to suppress the package
+  installation outputs (#21).
 
 ## revdeprun 0.3.0
 
