@@ -4,19 +4,37 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use tempfile::NamedTempFile;
 use xshell::{Shell, cmd};
 
-use crate::{util, workspace};
+use crate::{progress::Progress, util, workspace};
 
 /// Ensures a checkout of the target repository exists within `workspace`.
 ///
 /// Local paths are used as-is, while remote Git URLs are cloned.
-pub fn prepare_repository(shell: &Shell, workspace: &Path, spec: &str) -> Result<PathBuf> {
+pub fn prepare_repository(
+    shell: &Shell,
+    workspace: &Path,
+    spec: &str,
+    progress: &Progress,
+) -> Result<PathBuf> {
     let candidate = Path::new(spec);
     if candidate.exists() {
-        return workspace::canonicalized(candidate);
+        let task = progress.task(format!("Using local repository at {}", candidate.display()));
+        match workspace::canonicalized(candidate) {
+            Ok(path) => {
+                task.finish_with_message(format!("Using {}", path.display()));
+                return Ok(path);
+            }
+            Err(err) => {
+                task.fail(format!(
+                    "Failed to use local repository {}",
+                    candidate.display()
+                ));
+                return Err(err);
+            }
+        }
     }
 
     fs::create_dir_all(workspace).with_context(|| {
@@ -36,12 +54,45 @@ pub fn prepare_repository(shell: &Shell, workspace: &Path, spec: &str) -> Result
         );
     }
 
-    println!("Cloning {spec} into {}", destination.display());
-    cmd!(shell, "git clone --depth 1 {spec} {destination}")
-        .run()
-        .with_context(|| format!("failed to clone repository {spec}"))?;
+    let clone_task = progress.task(format!("Cloning {spec} into {}", destination.display()));
+    let output = cmd!(shell, "git clone --depth 1 {spec} {destination}")
+        .quiet()
+        .ignore_status()
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            clone_task.finish_with_message(format!("Cloned into {}", destination.display()));
+        }
+        Ok(output) => {
+            clone_task.fail(format!("Cloning {spec} failed"));
+            emit_command_output(progress, spec, &output.stdout, &output.stderr);
+            bail!("failed to clone repository {spec}");
+        }
+        Err(err) => {
+            clone_task.fail(format!("Cloning {spec} failed to start"));
+            return Err(err).with_context(|| format!("failed to clone repository {spec}"));
+        }
+    }
 
     workspace::canonicalized(&destination)
+}
+
+fn emit_command_output(progress: &Progress, spec: &str, stdout: &[u8], stderr: &[u8]) {
+    emit_stream(progress, spec, "stdout", stdout);
+    emit_stream(progress, spec, "stderr", stderr);
+}
+
+fn emit_stream(progress: &Progress, spec: &str, stream: &str, bytes: &[u8]) {
+    if bytes.is_empty() {
+        return;
+    }
+    let text = String::from_utf8_lossy(bytes);
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    progress.println(format!("git clone {spec} {stream}:\n{trimmed}"));
 }
 
 /// Runs `revdepcheck` for the repository under `repo_path`.
@@ -50,6 +101,7 @@ pub fn run_revdepcheck(
     workspace: &Path,
     repo_path: &Path,
     num_workers: usize,
+    progress: &Progress,
 ) -> Result<()> {
     let script_contents = build_revdep_script(repo_path, num_workers)?;
     let mut script =
@@ -58,12 +110,17 @@ pub fn run_revdepcheck(
         .write_all(script_contents.as_bytes())
         .context("failed to write revdepcheck bootstrap script")?;
 
-    println!("Launching revdepcheck with {num_workers} workers...");
+    progress.clear();
+    progress.println(format!(
+        "Launching revdepcheck with {num_workers} workers..."
+    ));
     let script_path = script.path().to_owned();
     let _dir_guard = shell.push_dir(repo_path);
-    cmd!(shell, "Rscript --vanilla {script_path}")
-        .run()
-        .context("revdepcheck reported an error")?;
+    progress.suspend(|| {
+        cmd!(shell, "Rscript --vanilla {script_path}")
+            .run()
+            .context("revdepcheck reported an error")
+    })?;
 
     Ok(())
 }
