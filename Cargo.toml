@@ -1,6 +1,6 @@
 [package]
 name = "revdeprun"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 description = "One-key reverse dependency checks for R via revdepcheck with cloud-ready environment setup"
 license = "MIT"
