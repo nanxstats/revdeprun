@@ -1,5 +1,12 @@
 # Changelog
 
+## revdeprun 0.3.0
+
+### Improvements
+
+- `revdep.rs` now sets `options(Ncpus = workers)` so the dependency compilation
+  phase can also use all available cores (#12).
+
 ## revdeprun 0.2.0
 
 ### Improvements
