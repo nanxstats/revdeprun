@@ -260,10 +260,8 @@ detect_codename <- function() {{
 
 ubuntu_codename <- detect_codename()
 cran_repo <- sprintf(
-  "https://packagemanager.posit.co/cran/latest/bin/linux/%s-%s/%s",
-  ubuntu_codename,
-  R.version[["arch"]],
-  substr(getRversion(), 1, 3)
+  "https://packagemanager.posit.co/cran/__linux__/%s/latest",
+  ubuntu_codename
 )
 
 options(
@@ -296,6 +294,7 @@ mod tests {
         assert!(script.contains("quiet = TRUE"));
         assert!(script.contains("remotes::install_github"));
         assert!(script.contains("repos = getOption(\"repos\")"));
+        assert!(script.contains("https://packagemanager.posit.co/cran/__linux__/"));
     }
 
     #[test]
@@ -310,5 +309,6 @@ mod tests {
         assert!(script.contains(".libPaths(c(user_lib, .libPaths()))"));
         assert!(script.contains("revdepcheck::revdep_reset"));
         assert!(script.contains("detect_codename <- function()"));
+        assert!(script.contains("https://packagemanager.posit.co/cran/__linux__/"));
     }
 }
