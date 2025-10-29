@@ -217,7 +217,11 @@ fn ensure_quarto(shell: &Shell, progress: &Progress) -> Result<()> {
     ensure_curl(shell, progress)?;
 
     let check_task = progress.task(format!("Checking existing Quarto {QUARTO_VERSION}"));
-    let already_installed = match cmd!(shell, "quarto --version").quiet().ignore_status().read() {
+    let already_installed = match cmd!(shell, "quarto --version")
+        .quiet()
+        .ignore_status()
+        .read()
+    {
         Ok(output) => output.contains(QUARTO_VERSION),
         Err(_) => false,
     };
@@ -367,8 +371,9 @@ fn ensure_curl(shell: &Shell, progress: &Progress) -> Result<()> {
     if cmd!(shell, "curl --version")
         .quiet()
         .ignore_status()
-        .run()
-        .is_ok()
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
     {
         return Ok(());
     }
