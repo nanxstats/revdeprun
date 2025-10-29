@@ -4,19 +4,37 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use tempfile::NamedTempFile;
 use xshell::{Shell, cmd};
 
-use crate::{util, workspace};
+use crate::{progress::Progress, util, workspace};
 
 /// Ensures a checkout of the target repository exists within `workspace`.
 ///
 /// Local paths are used as-is, while remote Git URLs are cloned.
-pub fn prepare_repository(shell: &Shell, workspace: &Path, spec: &str) -> Result<PathBuf> {
+pub fn prepare_repository(
+    shell: &Shell,
+    workspace: &Path,
+    spec: &str,
+    progress: &Progress,
+) -> Result<PathBuf> {
     let candidate = Path::new(spec);
     if candidate.exists() {
-        return workspace::canonicalized(candidate);
+        let task = progress.task(format!("Using local repository at {}", candidate.display()));
+        match workspace::canonicalized(candidate) {
+            Ok(path) => {
+                task.finish_with_message(format!("Using {}", path.display()));
+                return Ok(path);
+            }
+            Err(err) => {
+                task.fail(format!(
+                    "Failed to use local repository {}",
+                    candidate.display()
+                ));
+                return Err(err);
+            }
+        }
     }
 
     fs::create_dir_all(workspace).with_context(|| {
@@ -36,12 +54,50 @@ pub fn prepare_repository(shell: &Shell, workspace: &Path, spec: &str) -> Result
         );
     }
 
-    println!("Cloning {spec} into {}", destination.display());
-    cmd!(shell, "git clone --depth 1 {spec} {destination}")
-        .run()
-        .with_context(|| format!("failed to clone repository {spec}"))?;
+    let clone_task = progress.task(format!("Cloning {spec} into {}", destination.display()));
+    let output = cmd!(shell, "git clone --depth 1 {spec} {destination}")
+        .quiet()
+        .ignore_status()
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            clone_task.finish_with_message(format!("Cloned into {}", destination.display()));
+        }
+        Ok(output) => {
+            clone_task.fail(format!("Cloning {spec} failed"));
+            emit_command_output(
+                progress,
+                &format!("git clone {spec}"),
+                &output.stdout,
+                &output.stderr,
+            );
+            bail!("failed to clone repository {spec}");
+        }
+        Err(err) => {
+            clone_task.fail(format!("Cloning {spec} failed to start"));
+            return Err(err).with_context(|| format!("failed to clone repository {spec}"));
+        }
+    }
 
     workspace::canonicalized(&destination)
+}
+
+fn emit_command_output(progress: &Progress, label: &str, stdout: &[u8], stderr: &[u8]) {
+    emit_stream(progress, label, "stdout", stdout);
+    emit_stream(progress, label, "stderr", stderr);
+}
+
+fn emit_stream(progress: &Progress, label: &str, stream: &str, bytes: &[u8]) {
+    if bytes.is_empty() {
+        return;
+    }
+    let text = String::from_utf8_lossy(bytes);
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    progress.println(format!("{label} {stream}:\n{trimmed}"));
 }
 
 /// Runs `revdepcheck` for the repository under `repo_path`.
@@ -50,20 +106,65 @@ pub fn run_revdepcheck(
     workspace: &Path,
     repo_path: &Path,
     num_workers: usize,
+    progress: &Progress,
 ) -> Result<()> {
-    let script_contents = build_revdep_script(repo_path, num_workers)?;
-    let mut script =
+    let setup_contents = build_revdep_setup_script(repo_path, num_workers)?;
+    let mut setup_script =
         NamedTempFile::new_in(workspace).context("failed to create temporary R script file")?;
-    script
-        .write_all(script_contents.as_bytes())
-        .context("failed to write revdepcheck bootstrap script")?;
+    setup_script
+        .write_all(setup_contents.as_bytes())
+        .context("failed to write revdep bootstrap script")?;
 
-    println!("Launching revdepcheck with {num_workers} workers...");
-    let script_path = script.path().to_owned();
+    let run_contents = build_revdep_run_script(repo_path, num_workers)?;
+    let mut run_script =
+        NamedTempFile::new_in(workspace).context("failed to create temporary R script file")?;
+    run_script
+        .write_all(run_contents.as_bytes())
+        .context("failed to write revdep execution script")?;
+
+    let setup_path = setup_script.path().to_owned();
+    let run_path = run_script.path().to_owned();
+
     let _dir_guard = shell.push_dir(repo_path);
-    cmd!(shell, "Rscript --vanilla {script_path}")
-        .run()
-        .context("revdepcheck reported an error")?;
+
+    let bootstrap_task = progress.task("Bootstrapping revdep dependencies");
+    let setup_output = cmd!(shell, "Rscript --vanilla {setup_path}")
+        .quiet()
+        .ignore_status()
+        .output();
+
+    match setup_output {
+        Ok(output) if output.status.success() => {
+            bootstrap_task.finish_with_message("Revdep dependencies ready".to_string());
+        }
+        Ok(output) => {
+            bootstrap_task.fail("Failed to prepare revdep dependencies".to_string());
+            emit_command_output(
+                progress,
+                "revdep dependency bootstrap",
+                &output.stdout,
+                &output.stderr,
+            );
+            bail!(
+                "revdep dependency bootstrap failed with status {}",
+                output.status
+            );
+        }
+        Err(err) => {
+            bootstrap_task.fail("Failed to launch revdep bootstrap".to_string());
+            return Err(err).context("failed to prepare revdep dependencies");
+        }
+    }
+
+    progress.println(format!(
+        "Launching revdepcheck with {num_workers} workers..."
+    ));
+    progress.suspend(|| {
+        cmd!(shell, "Rscript --vanilla {run_path}")
+            .quiet()
+            .run()
+            .context("revdepcheck reported an error")
+    })?;
 
     Ok(())
 }
@@ -73,11 +174,67 @@ pub fn results_dir(repo_path: &Path) -> PathBuf {
     repo_path.join("revdep")
 }
 
-fn build_revdep_script(repo_path: &Path, num_workers: usize) -> Result<String> {
-    let path_literal = util::r_string_literal(&repo_path.to_string_lossy());
+fn build_revdep_setup_script(repo_path: &Path, num_workers: usize) -> Result<String> {
+    let prelude = script_prelude(repo_path, num_workers);
     let workers = num_workers.max(1);
 
     let script = format!(
+        r#"{prelude}
+
+if (!requireNamespace("BiocManager", quietly = TRUE)) {{
+  install.packages(
+    "BiocManager",
+    repos = "https://cloud.r-project.org/",
+    lib = user_lib,
+    quiet = TRUE,
+    Ncpus = {workers}
+  )
+}}
+if (!requireNamespace("remotes", quietly = TRUE)) {{
+  install.packages(
+    "remotes",
+    repos = "https://cloud.r-project.org/",
+    lib = user_lib,
+    quiet = TRUE,
+    Ncpus = {workers}
+  )
+}}
+if (!requireNamespace("revdepcheck", quietly = TRUE)) {{
+  remotes::install_github(
+    "r-lib/revdepcheck",
+    lib = user_lib,
+    upgrade = "never",
+    quiet = TRUE,
+    Ncpus = {workers}
+  )
+}}
+"#
+    );
+
+    Ok(script)
+}
+
+fn build_revdep_run_script(repo_path: &Path, num_workers: usize) -> Result<String> {
+    let prelude = script_prelude(repo_path, num_workers);
+    let workers = num_workers.max(1);
+
+    let script = format!(
+        r#"{prelude}
+
+Sys.setenv(R_BIOC_VERSION = as.character(BiocManager::version()))
+revdepcheck::revdep_reset()
+revdepcheck::revdep_check(num_workers = {workers}, quiet = FALSE)
+"#
+    );
+
+    Ok(script)
+}
+
+fn script_prelude(repo_path: &Path, num_workers: usize) -> String {
+    let path_literal = util::r_string_literal(&repo_path.to_string_lossy());
+    let workers = num_workers.max(1);
+
+    format!(
         r#"
 setwd({path_literal})
 options(
@@ -93,24 +250,8 @@ if (!nzchar(user_lib)) {{
 }}
 dir.create(user_lib, recursive = TRUE, showWarnings = FALSE)
 .libPaths(c(user_lib, .libPaths()))
-
-if (!requireNamespace("BiocManager", quietly = TRUE)) {{
-  install.packages("BiocManager", repos = "https://cloud.r-project.org/", lib = user_lib)
-}}
-if (!requireNamespace("remotes", quietly = TRUE)) {{
-  install.packages("remotes", repos = "https://cloud.r-project.org/", lib = user_lib)
-}}
-if (!requireNamespace("revdepcheck", quietly = TRUE)) {{
-  remotes::install_github("r-lib/revdepcheck", lib = user_lib, upgrade = "never", Ncpus = {workers})
-}}
-
-Sys.setenv(R_BIOC_VERSION = as.character(BiocManager::version()))
-revdepcheck::revdep_reset()
-revdepcheck::revdep_check(num_workers = {workers}, quiet = FALSE)
 "#
-    );
-
-    Ok(script)
+    )
 }
 
 #[cfg(test)]
@@ -118,14 +259,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn builds_script_with_expected_fragments() {
+    fn build_setup_script_installs_dependencies_quietly() {
         let path = Path::new("/tmp/example");
-        let script = build_revdep_script(path, 8).expect("script must build");
+        let script = build_revdep_setup_script(path, 8).expect("script must build");
+
+        assert!(script.contains("install.packages("));
+        assert!(script.contains("quiet = TRUE"));
+        assert!(script.contains("remotes::install_github"));
+    }
+
+    #[test]
+    fn build_run_script_triggers_revdepcheck() {
+        let path = Path::new("/tmp/example");
+        let script = build_revdep_run_script(path, 8).expect("script must build");
 
         assert!(script.contains("revdepcheck::revdep_check"));
         assert!(script.contains("num_workers = 8"));
         assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains(".libPaths(c(user_lib, .libPaths()))"));
-        assert!(script.contains("lib = user_lib"));
+        assert!(script.contains("revdepcheck::revdep_reset"));
     }
 }
