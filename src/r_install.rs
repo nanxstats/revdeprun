@@ -289,8 +289,9 @@ fn ensure_pandoc(shell: &Shell, progress: &Progress) -> Result<()> {
     let already_installed = cmd!(shell, "pandoc --version")
         .quiet()
         .ignore_status()
-        .run()
-        .is_ok();
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false);
     if already_installed {
         check_task.finish_with_message("Using existing pandoc");
         return Ok(());
