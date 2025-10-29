@@ -184,7 +184,7 @@ fn build_revdep_setup_script(repo_path: &Path, num_workers: usize) -> Result<Str
 if (!requireNamespace("BiocManager", quietly = TRUE)) {{
   install.packages(
     "BiocManager",
-    repos = "https://cloud.r-project.org/",
+    repos = getOption("repos"),
     lib = user_lib,
     quiet = TRUE,
     Ncpus = {workers}
@@ -193,7 +193,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {{
 if (!requireNamespace("remotes", quietly = TRUE)) {{
   install.packages(
     "remotes",
-    repos = "https://cloud.r-project.org/",
+    repos = getOption("repos"),
     lib = user_lib,
     quiet = TRUE,
     Ncpus = {workers}
@@ -223,7 +223,7 @@ fn build_revdep_run_script(repo_path: &Path, num_workers: usize) -> Result<Strin
 
 Sys.setenv(R_BIOC_VERSION = as.character(BiocManager::version()))
 revdepcheck::revdep_reset()
-revdepcheck::revdep_check(num_workers = {workers}, bioc = FALSE, quiet = TRUE)
+revdepcheck::revdep_check(num_workers = {workers}, bioc = FALSE, quiet = TRUE, timeout = 43200)
 "#
     );
 
@@ -237,8 +237,37 @@ fn script_prelude(repo_path: &Path, num_workers: usize) -> String {
     format!(
         r#"
 setwd({path_literal})
+
+detect_codename <- function() {{
+  release <- tryCatch(readLines("/etc/os-release"), error = function(e) character())
+  entry <- release[startsWith(release, "VERSION_CODENAME=")]
+  if (length(entry) > 0) {{
+    value <- sub("^VERSION_CODENAME=", "", entry)
+    value <- value[nzchar(value)]
+    if (length(value) > 0) {{
+      return(value[[1]])
+    }}
+  }}
+
+  lsb <- tryCatch(system("lsb_release -cs", intern = TRUE), error = function(e) character())
+  lsb <- lsb[nzchar(lsb)]
+  if (length(lsb) > 0) {{
+    return(lsb[[1]])
+  }}
+
+  stop("Unable to determine Ubuntu codename for selecting CRAN binary repo")
+}}
+
+ubuntu_codename <- detect_codename()
+cran_repo <- sprintf(
+  "https://packagemanager.posit.co/cran/latest/bin/linux/%s-%s/%s",
+  ubuntu_codename,
+  R.version[["arch"]],
+  substr(getRversion(), 1, 3)
+)
+
 options(
-  repos = "https://cloud.r-project.org/",
+  repos = c(CRAN = cran_repo),
   BioC_mirror = "https://packagemanager.posit.co/bioconductor",
   Ncpus = {workers}
 )
@@ -266,6 +295,7 @@ mod tests {
         assert!(script.contains("install.packages("));
         assert!(script.contains("quiet = TRUE"));
         assert!(script.contains("remotes::install_github"));
+        assert!(script.contains("repos = getOption(\"repos\")"));
     }
 
     #[test]
@@ -275,8 +305,10 @@ mod tests {
 
         assert!(script.contains("revdepcheck::revdep_check"));
         assert!(script.contains("num_workers = 8"));
+        assert!(script.contains("timeout = 43200"));
         assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains(".libPaths(c(user_lib, .libPaths()))"));
         assert!(script.contains("revdepcheck::revdep_reset"));
+        assert!(script.contains("detect_codename <- function()"));
     }
 }

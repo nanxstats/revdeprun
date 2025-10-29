@@ -1,5 +1,15 @@
 # Changelog
 
+## revdeprun 0.4.0
+
+### Bug fixes
+
+- revdepcheck scripts now use Posit Public Package Manager Ubuntu binary
+  repositories based on the detected system codename to minimize potential
+  source build timeouts.
+  Also, increased the `revdepcheck::revdep_check()` timeout to 12 hours
+  to accommodate longer installation and reverse dependency checks.
+
 ## revdeprun 0.3.0
 
 ### Speed optimization

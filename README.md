@@ -46,7 +46,7 @@ restart your shell.
 
 Currently, this tool is designed for Ubuntu-based systems and requires:
 
-- Operating system: Ubuntu 20.04 or newer
+- Operating system: Ubuntu 22.04 or newer
 - Version control: Git on `PATH`
 - Network access: To download R, R packages, and repository
 - Elevated privileges: `sudo` access for installing system dependencies and R
