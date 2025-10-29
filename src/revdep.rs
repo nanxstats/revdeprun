@@ -223,7 +223,7 @@ fn build_revdep_run_script(repo_path: &Path, num_workers: usize) -> Result<Strin
 
 Sys.setenv(R_BIOC_VERSION = as.character(BiocManager::version()))
 revdepcheck::revdep_reset()
-revdepcheck::revdep_check(num_workers = {workers}, quiet = FALSE)
+revdepcheck::revdep_check(num_workers = {workers}, bioc = FALSE, quiet = FALSE)
 "#
     );
 
