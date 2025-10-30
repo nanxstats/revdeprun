@@ -227,7 +227,7 @@ if (length(todo_pkgs) > 0) {{
   if (length(precache_failures) > 0) {{
     warning(sprintf("Failed to precache %d packages: %s", length(precache_failures), paste(precache_failures, collapse = ", ")))
   }}
-  revdepcheck.extras::revdep_preinstall(todo_pkgs)
+  revdepcheck.extras::revdep_preinstall(todo_pkgs, chunk_size = install_workers)
 }} else {{
   message("No reverse dependencies discovered; skipping precache and preinstall steps.")
 }}
@@ -295,7 +295,9 @@ mod tests {
 
         assert!(script.contains("revdepcheck.extras::run"));
         assert!(script.contains("revdepcheck.extras::revdep_precache"));
-        assert!(script.contains("revdepcheck.extras::revdep_preinstall"));
+        assert!(script.contains(
+            "revdepcheck.extras::revdep_preinstall(todo_pkgs, chunk_size = install_workers)"
+        ));
         assert!(script.contains("revdepcheck.extras::revdep_reset"));
         assert!(script.contains("revdepcheck::revdep_add"));
         assert!(script.contains("revdepcheck.extras::todo"));
