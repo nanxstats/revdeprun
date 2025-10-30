@@ -228,7 +228,7 @@ ensure_installed <- function(pkg) {{
 ensure_installed("pak")
 
 if (!requireNamespace("revdepcheck", quietly = TRUE)) {{
-  pak::pak_install(
+  pak::pkg_install(
     "r-lib/revdepcheck",
     lib = user_lib,
     ask = FALSE,
@@ -283,7 +283,7 @@ mod tests {
         assert!(script.contains("revdepcheck::cran_revdeps"));
         assert!(script.contains("pak::pkg_sysreqs"));
         assert!(script.contains("ensure_installed(\"pak\")"));
-        assert!(script.contains("pak::pak_install("));
+        assert!(script.contains("pak::pkg_install("));
         assert!(script.contains("available.packages"));
         assert!(script.contains("jsonlite::toJSON"));
         assert!(script.contains("Sys.setenv(NOT_CRAN = \"true\")"));

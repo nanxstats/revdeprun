@@ -183,7 +183,7 @@ if (!requireNamespace("pak", quietly = TRUE)) {{
   )
 }}
 if (!requireNamespace("revdepcheck", quietly = TRUE)) {{
-  pak::pak_install(
+  pak::pkg_install(
     "r-lib/revdepcheck",
     lib = user_lib,
     ask = FALSE,
@@ -251,7 +251,7 @@ mod tests {
 
         assert!(script.contains("install.packages("));
         assert!(script.contains("quiet = TRUE"));
-        assert!(script.contains("pak::pak_install"));
+        assert!(script.contains("pak::pkg_install"));
         assert!(script.contains("repos = getOption(\"repos\")"));
         assert!(script.contains("https://cloud.r-project.org/"));
     }
