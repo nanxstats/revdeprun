@@ -97,7 +97,7 @@ pub fn run_revdepcheck(
         NamedTempFile::new_in(workspace).context("failed to create temporary R script file")?;
     setup_script
         .write_all(setup_contents.as_bytes())
-        .context("failed to write revdep bootstrap script")?;
+        .context("failed to write revdepcheck bootstrap script")?;
 
     let prepare_contents = build_revdep_prepare_script(repo_path, num_workers)?;
     let run_contents = build_revdep_run_script(repo_path, num_workers)?;
@@ -118,7 +118,7 @@ pub fn run_revdepcheck(
 
     let _dir_guard = shell.push_dir(repo_path);
 
-    let bootstrap_task = progress.task("Bootstrapping revdep dependencies");
+    let bootstrap_task = progress.task("Bootstrapping revdepcheck dependencies");
     let setup_output = cmd!(shell, "Rscript --vanilla {setup_path}")
         .quiet()
         .ignore_status()
@@ -126,24 +126,24 @@ pub fn run_revdepcheck(
 
     match setup_output {
         Ok(output) if output.status.success() => {
-            bootstrap_task.finish_with_message("Revdep dependencies ready".to_string());
+            bootstrap_task.finish_with_message("revdepcheck dependencies ready".to_string());
         }
         Ok(output) => {
-            bootstrap_task.fail("Failed to prepare revdep dependencies".to_string());
+            bootstrap_task.fail("Failed to prepare revdepcheck dependencies".to_string());
             util::emit_command_output(
                 progress,
-                "revdep dependency bootstrap",
+                "revdepcheck dependency bootstrap",
                 &output.stdout,
                 &output.stderr,
             );
             bail!(
-                "revdep dependency bootstrap failed with status {}",
+                "revdepcheck dependency bootstrap failed with status {}",
                 output.status
             );
         }
         Err(err) => {
-            bootstrap_task.fail("Failed to launch revdep bootstrap".to_string());
-            return Err(err).context("failed to prepare revdep dependencies");
+            bootstrap_task.fail("Failed to launch revdepcheck bootstrap".to_string());
+            return Err(err).context("failed to prepare revdepcheck dependencies");
         }
     }
 
