@@ -14,6 +14,7 @@ mod progress;
 mod r_install;
 mod r_version;
 mod revdep;
+mod sysreqs;
 pub mod util;
 mod workspace;
 
@@ -82,6 +83,15 @@ pub fn run() -> Result<()> {
         .num_workers
         .map(|value| value.get())
         .unwrap_or_else(num_cpus::get);
+
+    sysreqs::install_reverse_dep_sysreqs(
+        &shell,
+        &workspace_path,
+        &repository_path,
+        num_workers,
+        &progress,
+    )
+    .context("failed to install system requirements for reverse dependencies")?;
 
     revdep::run_revdepcheck(
         &shell,
