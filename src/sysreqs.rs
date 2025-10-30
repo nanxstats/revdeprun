@@ -277,6 +277,7 @@ sysreqs <- if (length(cranrevdeps) == 0) {{
 if (!is.list(sysreqs) || is.null(sysreqs$install_scripts) || is.null(sysreqs$post_install)) {{
   stop("unexpected sysreqs payload")
 }}
+sysreqs$post_install <- unique(sysreqs$post_install)
 
 cat(jsonlite::toJSON(sysreqs[c('install_scripts', 'post_install')], auto_unbox = TRUE))
 "#
