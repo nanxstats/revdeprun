@@ -1,7 +1,7 @@
 use std::{fs, io::Write, path::Path};
 
 use anyhow::{Context, Result, anyhow, bail};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use tempfile::NamedTempFile;
 use xshell::{Shell, cmd};
 
@@ -9,10 +9,35 @@ use crate::{progress::Progress, util};
 
 #[derive(Debug, Deserialize)]
 struct SysreqsPayload {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "string_or_vec")]
     install_scripts: Vec<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "string_or_vec")]
     post_install: Vec<String>,
+}
+
+fn string_or_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::Error as _;
+    use serde_json::Value;
+
+    match Value::deserialize(deserializer)? {
+        Value::Null => Ok(Vec::new()),
+        Value::String(s) => Ok(vec![s]),
+        Value::Array(items) => items
+            .into_iter()
+            .map(|value| match value {
+                Value::String(s) => Ok(s),
+                other => Err(D::Error::custom(format!(
+                    "expected string in array, got {other}"
+                ))),
+            })
+            .collect(),
+        other => Err(D::Error::custom(format!(
+            "expected string, array, or null, got {other}"
+        ))),
+    }
 }
 
 /// Resolves and installs system requirements for reverse dependencies.
@@ -287,5 +312,36 @@ mod tests {
         assert!(script.contains("available.packages"));
         assert!(script.contains("jsonlite::toJSON"));
         assert!(script.contains("Sys.setenv(NOT_CRAN = \"true\")"));
+    }
+
+    #[test]
+    fn deserializes_string_install_script() {
+        let json = r#"
+            {
+                "install_scripts": "apt-get install libcurl4",
+                "post_install": []
+            }
+        "#;
+        let payload: SysreqsPayload =
+            serde_json::from_str(json).expect("string payload should deserialize");
+        assert_eq!(
+            payload.install_scripts,
+            vec!["apt-get install libcurl4".to_string()]
+        );
+        assert!(payload.post_install.is_empty());
+    }
+
+    #[test]
+    fn deserializes_null_install_scripts() {
+        let json = r#"
+            {
+                "install_scripts": null,
+                "post_install": "echo done"
+            }
+        "#;
+        let payload: SysreqsPayload =
+            serde_json::from_str(json).expect("null payload should deserialize");
+        assert!(payload.install_scripts.is_empty());
+        assert_eq!(payload.post_install, vec!["echo done".to_string()]);
     }
 }
