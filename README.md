@@ -49,7 +49,7 @@ Currently, this tool is designed for Ubuntu-based systems and requires:
 - Operating system: Ubuntu 22.04 or newer
 - Version control: Git on `PATH`
 - Network access: To download R, R packages, and repository
-- Elevated privileges: `sudo` access for installing system dependencies and R
+- Elevated privileges: `sudo` access for installing R and system deps
 
 Security note: Reverse dependency checks execute arbitrary third-party code.
 Run `revdeprun` in temporary, isolated environments such as disposable cloud

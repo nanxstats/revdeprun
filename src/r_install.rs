@@ -11,42 +11,49 @@ use xshell::{Shell, cmd};
 
 use crate::{progress::Progress, r_version::ResolvedRVersion};
 
+const QUARTO_VERSION: &str = "1.8.25";
+
 /// Ensures the requested R toolchain is installed system-wide.
 pub fn install_r(shell: &Shell, version: &ResolvedRVersion, progress: &Progress) -> Result<()> {
     let check_task = progress.task(format!(
         "Checking existing R {} installation",
         version.version
     ));
-    if is_r_already_installed(shell, version)? {
+    let r_already_installed = is_r_already_installed(shell, version)?;
+    if r_already_installed {
         check_task.finish_with_message(format!("Using existing R {}", version.version));
-        return Ok(());
+    } else {
+        check_task.finish_with_message(format!("R {} not detected; installing", version.version));
+
+        let download_task = progress.task(format!("Downloading R {} installer", version.version));
+        let installer = match download_installer(version) {
+            Ok(installer) => {
+                let file_name = installer
+                    .path()
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("installer.deb");
+                download_task
+                    .finish_with_message(format!("Downloaded R {} ({file_name})", version.version));
+                installer
+            }
+            Err(err) => {
+                download_task.fail(format!("Download of R {} failed", version.version));
+                return Err(err);
+            }
+        };
+
+        install_prerequisites(shell, progress).context("failed to install R prerequisites")?;
+        install_from_deb(shell, installer.path(), progress)
+            .with_context(|| format!("failed to install {}", installer.path().display()))?;
+        configure_symlinks(shell, version, progress).context("failed to configure R symlinks")?;
+
+        progress.println(format!("R {} installation completed", version.version));
     }
-    check_task.finish_with_message(format!("R {} not detected; installing", version.version));
 
-    let download_task = progress.task(format!("Downloading R {} installer", version.version));
-    let installer = match download_installer(version) {
-        Ok(installer) => {
-            let file_name = installer
-                .path()
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("installer.deb");
-            download_task
-                .finish_with_message(format!("Downloaded R {} ({file_name})", version.version));
-            installer
-        }
-        Err(err) => {
-            download_task.fail(format!("Download of R {} failed", version.version));
-            return Err(err);
-        }
-    };
-
-    install_prerequisites(shell, progress).context("failed to install R prerequisites")?;
-    install_from_deb(shell, installer.path(), progress)
-        .with_context(|| format!("failed to install {}", installer.path().display()))?;
-    configure_symlinks(shell, version, progress).context("failed to configure R symlinks")?;
-
-    progress.println(format!("R {} installation completed", version.version));
+    ensure_quarto(shell, progress).context("failed to provision Quarto")?;
+    ensure_pandoc(shell, progress).context("failed to provision pandoc")?;
+    ensure_tinytex(shell, progress).context("failed to provision TinyTeX")?;
 
     Ok(())
 }
@@ -76,7 +83,7 @@ fn install_prerequisites(shell: &Shell, progress: &Progress) -> Result<()> {
         "base R prerequisites installed",
         cmd!(
             shell,
-            "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y gdebi-core qpdf devscripts ghostscript pandoc"
+            "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y gdebi-core qpdf devscripts ghostscript"
         ),
     )?;
 
@@ -204,6 +211,193 @@ fn download_installer(version: &ResolvedRVersion) -> Result<DownloadedInstaller>
         temp_dir,
         path: installer_path,
     })
+}
+
+fn ensure_quarto(shell: &Shell, progress: &Progress) -> Result<()> {
+    ensure_curl(shell, progress)?;
+
+    let check_task = progress.task(format!("Checking existing Quarto {QUARTO_VERSION}"));
+    let already_installed = match cmd!(shell, "quarto --version")
+        .quiet()
+        .ignore_status()
+        .read()
+    {
+        Ok(output) => output.contains(QUARTO_VERSION),
+        Err(_) => false,
+    };
+
+    if already_installed {
+        check_task.finish_with_message(format!("Using existing Quarto {QUARTO_VERSION}"));
+        return Ok(());
+    }
+    check_task.finish_with_message(format!("Quarto {QUARTO_VERSION} not detected; installing"));
+
+    run_command(
+        progress,
+        format!("Creating /opt/quarto/{QUARTO_VERSION}"),
+        format!("Prepared /opt/quarto/{QUARTO_VERSION}"),
+        cmd!(shell, "sudo mkdir -p /opt/quarto/{QUARTO_VERSION}"),
+    )?;
+
+    let tarball_path = format!("/tmp/quarto-{QUARTO_VERSION}.tar.gz");
+    let download_url = format!(
+        "https://github.com/quarto-dev/quarto-cli/releases/download/v{}/quarto-{}-linux-amd64.tar.gz",
+        QUARTO_VERSION, QUARTO_VERSION
+    );
+
+    run_command(
+        progress,
+        format!("Downloading Quarto {QUARTO_VERSION} bundle"),
+        format!("Downloaded Quarto {QUARTO_VERSION} bundle"),
+        cmd!(shell, "curl -fsSL -o {tarball_path} -L {download_url}"),
+    )?;
+
+    run_command(
+        progress,
+        format!("Extracting Quarto {QUARTO_VERSION} bundle"),
+        format!("Installed Quarto {QUARTO_VERSION} to /opt/quarto/{QUARTO_VERSION}"),
+        cmd!(
+            shell,
+            "sudo tar -xzf {tarball_path} -C /opt/quarto/{QUARTO_VERSION} --strip-components=1"
+        ),
+    )?;
+
+    run_command(
+        progress,
+        "Cleaning temporary Quarto archive",
+        "Removed temporary Quarto archive",
+        cmd!(shell, "rm -f {tarball_path}"),
+    )?;
+
+    run_command(
+        progress,
+        "Linking Quarto binary",
+        format!("Linked /usr/local/bin/quarto -> /opt/quarto/{QUARTO_VERSION}/bin/quarto"),
+        cmd!(
+            shell,
+            "sudo ln -sf /opt/quarto/{QUARTO_VERSION}/bin/quarto /usr/local/bin/quarto"
+        ),
+    )?;
+
+    progress.println(format!("Quarto {QUARTO_VERSION} installation completed"));
+
+    Ok(())
+}
+
+fn ensure_pandoc(shell: &Shell, progress: &Progress) -> Result<()> {
+    let check_task = progress.task("Checking existing pandoc");
+    let already_installed = cmd!(shell, "pandoc --version")
+        .quiet()
+        .ignore_status()
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false);
+    if already_installed {
+        check_task.finish_with_message("Using existing pandoc");
+        return Ok(());
+    }
+    check_task.finish_with_message("pandoc not detected; installing");
+
+    run_command(
+        progress,
+        "Updating apt metadata for pandoc",
+        "apt metadata updated for pandoc",
+        cmd!(
+            shell,
+            "sudo env DEBIAN_FRONTEND=noninteractive apt-get update -y -qq"
+        ),
+    )?;
+
+    run_command(
+        progress,
+        "Installing pandoc",
+        "pandoc installed",
+        cmd!(
+            shell,
+            "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y pandoc"
+        ),
+    )?;
+
+    progress.println("pandoc installation completed");
+
+    Ok(())
+}
+
+fn ensure_tinytex(shell: &Shell, progress: &Progress) -> Result<()> {
+    let check_task = progress.task("Checking existing TinyTeX");
+    let already_installed = cmd!(shell, "tlmgr --version")
+        .quiet()
+        .ignore_status()
+        .run()
+        .is_ok();
+    if already_installed {
+        check_task.finish_with_message("Using existing TinyTeX");
+        return Ok(());
+    }
+    check_task.finish_with_message("TinyTeX not detected; installing");
+
+    run_command(
+        progress,
+        "Installing TinyTeX via Quarto",
+        "TinyTeX installed via Quarto",
+        cmd!(shell, "quarto install tinytex --update-path"),
+    )?;
+
+    if let Ok(path_output) = cmd!(shell, "quarto tools path tinytex")
+        .ignore_status()
+        .read()
+    {
+        let tinytex_bin = path_output.trim();
+        if !tinytex_bin.is_empty() {
+            for binary in ["tlmgr", "pdflatex", "xelatex", "lualatex"] {
+                let source = format!("{tinytex_bin}/{binary}");
+                if Path::new(&source).exists() {
+                    run_command(
+                        progress,
+                        format!("Linking TinyTeX {binary}"),
+                        format!("Linked /usr/local/bin/{binary}"),
+                        cmd!(shell, "sudo ln -sf {source} /usr/local/bin/{binary}"),
+                    )?;
+                }
+            }
+        }
+    }
+
+    progress.println("TinyTeX installation completed");
+
+    Ok(())
+}
+
+fn ensure_curl(shell: &Shell, progress: &Progress) -> Result<()> {
+    if cmd!(shell, "curl --version")
+        .quiet()
+        .ignore_status()
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+
+    run_command(
+        progress,
+        "Updating apt metadata for curl",
+        "apt metadata updated for curl",
+        cmd!(
+            shell,
+            "sudo env DEBIAN_FRONTEND=noninteractive apt-get update -y -qq"
+        ),
+    )?;
+
+    run_command(
+        progress,
+        "Installing curl",
+        "curl installed",
+        cmd!(
+            shell,
+            "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y curl"
+        ),
+    )
 }
 
 fn http_client() -> Result<Client> {
