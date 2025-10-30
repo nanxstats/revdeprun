@@ -1,3 +1,5 @@
+use crate::progress::Progress;
+
 /// Returns a single-quoted R string literal with minimal escaping.
 ///
 /// # Examples
@@ -42,6 +44,24 @@ pub fn guess_repo_name(spec: &str) -> Option<String> {
     } else {
         Some(candidate.to_string())
     }
+}
+
+/// Emits stdout/stderr captured from a command to the progress renderer.
+pub fn emit_command_output(progress: &Progress, label: &str, stdout: &[u8], stderr: &[u8]) {
+    emit_stream(progress, label, "stdout", stdout);
+    emit_stream(progress, label, "stderr", stderr);
+}
+
+fn emit_stream(progress: &Progress, label: &str, stream: &str, bytes: &[u8]) {
+    if bytes.is_empty() {
+        return;
+    }
+    let text = String::from_utf8_lossy(bytes);
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    progress.println(format!("{label} {stream}:\n{trimmed}"));
 }
 
 #[cfg(test)]

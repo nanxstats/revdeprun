@@ -2,9 +2,12 @@
 
 ## [Unreleased]
 
-### Improvements
+### New features
 
-- Install Quarto and TinyTeX with `PATH` updates so `.qmd` and PDF
+- Resolve the Ubuntu system requirements of all CRAN reverse dependencies with
+  `pak::pkg_sysreqs()` and run the installation with post-installation commands
+  before running revdepcheck.
+- Provision Quarto and TinyTeX with `PATH` updates by default so `.qmd` and PDF
   vignettes can render during reverse dependency checks.
 
 ## revdeprun 0.4.0
@@ -15,10 +18,13 @@
   accommodate longer installation and reverse dependency checks (#25).
   Keep using the source package mirror so that revdepcheck can run (#28, #30).
 
+### New features
+
+- Provision `pandoc` by default so R package vignettes can build during
+  reverse dependency checks (#26).
+
 ### Improvements
 
-- Install `pandoc` by default so R package vignettes can build during
-  reverse dependency checks (#26).
 - Set `revdepcheck::revdep_check(bioc = FALSE)` to follow the default
   behavior of `revdepcheck::cloud_check()` on **not** checking Bioconductor
   packages by default (#20).

@@ -66,7 +66,7 @@ pub fn prepare_repository(
         }
         Ok(output) => {
             clone_task.fail(format!("Cloning {spec} failed"));
-            emit_command_output(
+            util::emit_command_output(
                 progress,
                 &format!("git clone {spec}"),
                 &output.stdout,
@@ -81,23 +81,6 @@ pub fn prepare_repository(
     }
 
     workspace::canonicalized(&destination)
-}
-
-fn emit_command_output(progress: &Progress, label: &str, stdout: &[u8], stderr: &[u8]) {
-    emit_stream(progress, label, "stdout", stdout);
-    emit_stream(progress, label, "stderr", stderr);
-}
-
-fn emit_stream(progress: &Progress, label: &str, stream: &str, bytes: &[u8]) {
-    if bytes.is_empty() {
-        return;
-    }
-    let text = String::from_utf8_lossy(bytes);
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return;
-    }
-    progress.println(format!("{label} {stream}:\n{trimmed}"));
 }
 
 /// Runs `revdepcheck` for the repository under `repo_path`.
@@ -139,7 +122,7 @@ pub fn run_revdepcheck(
         }
         Ok(output) => {
             bootstrap_task.fail("Failed to prepare revdep dependencies".to_string());
-            emit_command_output(
+            util::emit_command_output(
                 progress,
                 "revdep dependency bootstrap",
                 &output.stdout,
@@ -190,9 +173,9 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {{
     Ncpus = {workers}
   )
 }}
-if (!requireNamespace("remotes", quietly = TRUE)) {{
+if (!requireNamespace("pak", quietly = TRUE)) {{
   install.packages(
-    "remotes",
+    "pak",
     repos = getOption("repos"),
     lib = user_lib,
     quiet = TRUE,
@@ -200,12 +183,12 @@ if (!requireNamespace("remotes", quietly = TRUE)) {{
   )
 }}
 if (!requireNamespace("revdepcheck", quietly = TRUE)) {{
-  remotes::install_github(
+  pak::pkg_install(
     "r-lib/revdepcheck",
     lib = user_lib,
-    upgrade = "never",
-    quiet = TRUE,
-    Ncpus = {workers}
+    ask = FALSE,
+    upgrade = FALSE,
+    dependencies = TRUE
   )
 }}
 "#
@@ -268,7 +251,7 @@ mod tests {
 
         assert!(script.contains("install.packages("));
         assert!(script.contains("quiet = TRUE"));
-        assert!(script.contains("remotes::install_github"));
+        assert!(script.contains("pak::pkg_install"));
         assert!(script.contains("repos = getOption(\"repos\")"));
         assert!(script.contains("https://cloud.r-project.org/"));
     }
