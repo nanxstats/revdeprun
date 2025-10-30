@@ -1,7 +1,14 @@
 use std::{
     fs,
-    io::Write,
+    io::{self, Write},
     path::{Path, PathBuf},
+    process::{Command, Stdio},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread,
+    time::Duration,
 };
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -9,7 +16,10 @@ use serde::Deserialize;
 use tempfile::NamedTempFile;
 use xshell::{Shell, cmd};
 
-use crate::{progress::Progress, util, workspace};
+use crate::{
+    progress::{Progress, Task},
+    util, workspace,
+};
 
 /// Ensures a checkout of the target repository exists within `workspace`.
 ///
@@ -147,35 +157,12 @@ pub fn run_revdepcheck(
         }
     }
 
-    let prepare_task = progress.task("Pre-installing reverse dependencies");
-    let prepare_output = cmd!(shell, "Rscript --vanilla {prepare_path}")
-        .quiet()
-        .ignore_status()
-        .output();
-
-    let prepare_summary = match prepare_output {
-        Ok(output) if output.status.success() => {
-            prepare_task.finish_with_message("Reverse dependencies discovered".to_string());
-            parse_revdep_prepare_summary(progress, &output.stdout)?
-        }
-        Ok(output) => {
-            prepare_task.fail("Failed to prepare revdep metadata".to_string());
-            util::emit_command_output(
-                progress,
-                "revdep metadata preparation",
-                &output.stdout,
-                &output.stderr,
-            );
-            bail!(
-                "revdep metadata preparation failed with status {}",
-                output.status
-            );
-        }
-        Err(err) => {
-            prepare_task.fail("Failed to launch revdep metadata preparation".to_string());
-            return Err(err).context("failed to prepare revdep metadata");
-        }
-    };
+    let prepare_summary = run_revdep_prepare_phase(
+        repo_path,
+        &prepare_path,
+        progress,
+        progress.task("Pre-installing reverse dependencies"),
+    )?;
 
     report_prepare_summary(progress, &prepare_summary);
 
@@ -243,6 +230,136 @@ fn report_prepare_summary(progress: &Progress, summary: &PrepareSummary) {
         for warning in &summary.warnings {
             progress.println(format!("Warning from revdep preparation: {warning}"));
         }
+    }
+}
+
+fn run_revdep_prepare_phase(
+    repo_path: &Path,
+    prepare_path: &Path,
+    progress: &Progress,
+    prepare_task: Task,
+) -> Result<PrepareSummary> {
+    let progress_bar = prepare_task.progress_bar();
+
+    let mut command = Command::new("Rscript");
+    command.arg("--vanilla");
+    command.arg(prepare_path);
+    command.current_dir(repo_path);
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+
+    let child = match command.spawn() {
+        Ok(child) => child,
+        Err(err) => {
+            prepare_task.fail("Failed to launch revdep metadata preparation".to_string());
+            return Err(err).context("failed to launch revdep metadata preparation");
+        }
+    };
+
+    let monitor = CrancacheMonitor::start(progress_bar, repo_path.to_path_buf());
+
+    let output_result = child.wait_with_output();
+    monitor.shutdown();
+
+    let output = match output_result {
+        Ok(output) => output,
+        Err(err) => {
+            prepare_task.fail("Failed to capture revdep metadata output".to_string());
+            return Err(err).context("failed to capture revdep metadata output");
+        }
+    };
+
+    if output.status.success() {
+        match parse_revdep_prepare_summary(progress, &output.stdout) {
+            Ok(summary) => {
+                prepare_task.finish_with_message("Reverse dependencies discovered".to_string());
+                Ok(summary)
+            }
+            Err(err) => {
+                prepare_task.fail("Failed to parse revdep metadata summary".to_string());
+                Err(err)
+            }
+        }
+    } else {
+        prepare_task.fail("Failed to prepare revdep metadata".to_string());
+        util::emit_command_output(
+            progress,
+            "revdep metadata preparation",
+            &output.stdout,
+            &output.stderr,
+        );
+        bail!(
+            "revdep metadata preparation failed with status {}",
+            output.status
+        );
+    }
+}
+
+struct CrancacheMonitor {
+    stop: Arc<AtomicBool>,
+    handle: thread::JoinHandle<()>,
+}
+
+impl CrancacheMonitor {
+    fn start(bar: indicatif::ProgressBar, repo_root: PathBuf) -> Self {
+        let stop = Arc::new(AtomicBool::new(false));
+        let stop_flag = stop.clone();
+        let handle = thread::spawn(move || {
+            let src_dir = repo_root.join("revdep/crancache/cran/src/contrib");
+            let bin_dir = repo_root.join("revdep/crancache/cran-bin/src/contrib");
+            let mut last_message = String::new();
+
+            while !stop_flag.load(Ordering::SeqCst) {
+                let src_count = count_cached_packages(&src_dir);
+                let bin_count = count_cached_packages(&bin_dir);
+                let message = format!(
+                    "Pre-installing reverse dependencies (cache: {src_count} src tarballs, {bin_count} binary tarballs)"
+                );
+
+                if message != last_message {
+                    bar.set_message(message.clone());
+                    last_message = message;
+                }
+
+                for _ in 0..10 {
+                    if stop_flag.load(Ordering::SeqCst) {
+                        break;
+                    }
+                    thread::sleep(Duration::from_secs(1));
+                }
+            }
+        });
+
+        Self { stop, handle }
+    }
+
+    fn shutdown(self) {
+        self.stop.store(true, Ordering::SeqCst);
+        let _ = self.handle.join();
+    }
+}
+
+const CRANCACHE_METADATA_FILES: &[&str] =
+    &["PACKAGES", "PACKAGES.db", "PACKAGES.gz", "PACKAGES.rds"];
+
+fn count_cached_packages(dir: &Path) -> usize {
+    match fs::read_dir(dir) {
+        Ok(entries) => entries
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| match entry.file_type() {
+                Ok(kind) => kind.is_file(),
+                Err(_) => false,
+            })
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_str()
+                    .map(|name| !CRANCACHE_METADATA_FILES.contains(&name))
+                    .unwrap_or(true)
+            })
+            .count(),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => 0,
+        Err(_) => 0,
     }
 }
 
