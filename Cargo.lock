@@ -836,6 +836,7 @@ dependencies = [
  "num_cpus",
  "reqwest",
  "serde",
+ "serde_json",
  "tempfile",
  "xshell",
 ]
