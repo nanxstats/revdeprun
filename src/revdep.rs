@@ -140,7 +140,7 @@ pub fn run_revdepcheck(
     }
 
     progress.println(format!(
-        "Launching revdepcheck with {num_workers} workers..."
+        "Launching revdepcheck.extras with {num_workers} workers..."
     ));
     progress.suspend(|| {
         cmd!(shell, "Rscript --vanilla {run_path}")
@@ -159,7 +159,6 @@ pub fn results_dir(repo_path: &Path) -> PathBuf {
 
 fn build_revdep_setup_script(repo_path: &Path, num_workers: usize) -> Result<String> {
     let prelude = script_prelude(repo_path, num_workers);
-    let workers = num_workers.max(1);
 
     let script = format!(
         r#"{prelude}
@@ -170,7 +169,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {{
     repos = getOption("repos"),
     lib = user_lib,
     quiet = TRUE,
-    Ncpus = {workers}
+    Ncpus = install_workers
   )
 }}
 if (!requireNamespace("pak", quietly = TRUE)) {{
@@ -179,16 +178,17 @@ if (!requireNamespace("pak", quietly = TRUE)) {{
     repos = getOption("repos"),
     lib = user_lib,
     quiet = TRUE,
-    Ncpus = {workers}
+    Ncpus = install_workers
   )
 }}
-if (!requireNamespace("revdepcheck", quietly = TRUE)) {{
+if (!requireNamespace("revdepcheck.extras", quietly = TRUE)) {{
   pak::pkg_install(
-    "r-lib/revdepcheck",
+    "HenrikBengtsson/revdepcheck.extras",
     lib = user_lib,
     ask = FALSE,
     upgrade = FALSE,
-    dependencies = TRUE
+    dependencies = TRUE,
+    Ncpus = install_workers
   )
 }}
 "#
@@ -204,9 +204,35 @@ fn build_revdep_run_script(repo_path: &Path, num_workers: usize) -> Result<Strin
     let script = format!(
         r#"{prelude}
 
+options(revdepcheck.num_workers = {workers})
+if (!nzchar(Sys.getenv("R_REVDEPCHECK_NUM_WORKERS"))) {{
+  Sys.setenv(R_REVDEPCHECK_NUM_WORKERS = as.character({workers}))
+}}
+if (!nzchar(Sys.getenv("R_REVDEPCHECK_TIMEOUT"))) {{
+  Sys.setenv(R_REVDEPCHECK_TIMEOUT = "720")
+}}
 Sys.setenv(R_BIOC_VERSION = as.character(BiocManager::version()))
-revdepcheck::revdep_reset()
-revdepcheck::revdep_check(num_workers = {workers}, bioc = FALSE, quiet = TRUE, timeout = 43200)
+
+revdepcheck.extras::revdep_reset(".")
+revdepcheck.extras::revdep_init(".")
+
+children <- revdepcheck.extras::revdep_children(".")
+if (length(children) > 0) {{
+  revdepcheck::revdep_add(".", packages = children)
+}}
+
+todo_pkgs <- revdepcheck.extras::todo(".", print = FALSE)
+if (length(todo_pkgs) > 0) {{
+  precache_failures <- revdepcheck.extras::revdep_precache(package = ".")
+  if (length(precache_failures) > 0) {{
+    warning(sprintf("Failed to precache %d packages: %s", length(precache_failures), paste(precache_failures, collapse = ", ")))
+  }}
+  revdepcheck.extras::revdep_preinstall(todo_pkgs)
+}} else {{
+  message("No reverse dependencies discovered; skipping precache and preinstall steps.")
+}}
+
+revdepcheck.extras::run()
 "#
     );
 
@@ -222,11 +248,12 @@ fn script_prelude(repo_path: &Path, num_workers: usize) -> String {
 setwd({path_literal})
 
 cran_repo <- "https://cloud.r-project.org/"
+install_workers <- max({workers}, parallel::detectCores())
 
 options(
   repos = c(CRAN = cran_repo),
   BioC_mirror = "https://packagemanager.posit.co/bioconductor",
-  Ncpus = {workers}
+  Ncpus = install_workers
 )
 Sys.setenv(NOT_CRAN = "true")
 
@@ -236,6 +263,10 @@ if (!nzchar(user_lib)) {{
 }}
 dir.create(user_lib, recursive = TRUE, showWarnings = FALSE)
 .libPaths(c(user_lib, .libPaths()))
+
+crancache_dir <- file.path("revdep", "crancache")
+dir.create(crancache_dir, recursive = TRUE, showWarnings = FALSE)
+Sys.setenv(CRANCACHE_DIR = crancache_dir)
 "#
     )
 }
@@ -251,9 +282,10 @@ mod tests {
 
         assert!(script.contains("install.packages("));
         assert!(script.contains("quiet = TRUE"));
-        assert!(script.contains("pak::pkg_install"));
+        assert!(script.contains("HenrikBengtsson/revdepcheck.extras"));
         assert!(script.contains("repos = getOption(\"repos\")"));
         assert!(script.contains("https://cloud.r-project.org/"));
+        assert!(script.contains("parallel::detectCores"));
     }
 
     #[test]
@@ -261,12 +293,17 @@ mod tests {
         let path = Path::new("/tmp/example");
         let script = build_revdep_run_script(path, 8).expect("script must build");
 
-        assert!(script.contains("revdepcheck::revdep_check"));
+        assert!(script.contains("revdepcheck.extras::run"));
+        assert!(script.contains("revdepcheck.extras::revdep_precache"));
+        assert!(script.contains("revdepcheck.extras::revdep_preinstall"));
+        assert!(script.contains("revdepcheck.extras::revdep_reset"));
+        assert!(script.contains("revdepcheck::revdep_add"));
+        assert!(script.contains("revdepcheck.extras::todo"));
+        assert!(script.contains("R_REVDEPCHECK_NUM_WORKERS"));
+        assert!(script.contains("R_REVDEPCHECK_TIMEOUT"));
         assert!(script.contains("num_workers = 8"));
-        assert!(script.contains("timeout = 43200"));
         assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains(".libPaths(c(user_lib, .libPaths()))"));
-        assert!(script.contains("revdepcheck::revdep_reset"));
         assert!(script.contains("https://cloud.r-project.org/"));
     }
 }

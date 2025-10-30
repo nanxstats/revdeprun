@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Improvements
+
+- Replace the `revdepcheck` invocation with Henrik Bengtsson's
+  `revdepcheck.extras`, enabling cached package downloads plus pre-installation
+  of reverse dependencies to reduce "package suggested but not available"
+  failures on freshly provisioned machines.
+- Install `revdepcheck.extras` during system requirement resolution so the
+  bundled `revdepcheck` fork is used consistently across the workflow.
+
 ## revdeprun 0.5.0
 
 ### Improvements
