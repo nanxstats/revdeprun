@@ -147,7 +147,7 @@ pub fn run_revdepcheck(
         }
     }
 
-    let prepare_task = progress.task("Enumerating reverse dependencies");
+    let prepare_task = progress.task("Pre-installing reverse dependencies");
     let prepare_output = cmd!(shell, "Rscript --vanilla {prepare_path}")
         .quiet()
         .ignore_status()
