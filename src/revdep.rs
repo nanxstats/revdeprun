@@ -449,7 +449,7 @@ if (length(todo_pkgs) > 0) {{
   suppressWarnings(withCallingHandlers(
     suppressMessages(revdepcheck.extras::revdep_preinstall(
       todo_pkgs,
-      chunk_size = install_workers
+      chunk_size = 16L
     )),
     warning = handler
   ))
@@ -545,7 +545,7 @@ mod tests {
         assert!(script.contains("jsonlite::toJSON"));
         assert!(script.contains("revdepcheck::revdep_add"));
         assert!(script.contains("todo_pkgs <- revdepcheck.extras::todo"));
-        assert!(script.contains("chunk_size = install_workers"));
+        assert!(script.contains("chunk_size = 16L"));
     }
 
     #[test]
