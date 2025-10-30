@@ -173,9 +173,9 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {{
     Ncpus = {workers}
   )
 }}
-if (!requireNamespace("remotes", quietly = TRUE)) {{
+if (!requireNamespace("pak", quietly = TRUE)) {{
   install.packages(
-    "remotes",
+    "pak",
     repos = getOption("repos"),
     lib = user_lib,
     quiet = TRUE,
@@ -183,12 +183,12 @@ if (!requireNamespace("remotes", quietly = TRUE)) {{
   )
 }}
 if (!requireNamespace("revdepcheck", quietly = TRUE)) {{
-  remotes::install_github(
+  pak::pak_install(
     "r-lib/revdepcheck",
     lib = user_lib,
-    upgrade = "never",
-    quiet = TRUE,
-    Ncpus = {workers}
+    ask = FALSE,
+    upgrade = FALSE,
+    dependencies = TRUE
   )
 }}
 "#
@@ -251,7 +251,7 @@ mod tests {
 
         assert!(script.contains("install.packages("));
         assert!(script.contains("quiet = TRUE"));
-        assert!(script.contains("remotes::install_github"));
+        assert!(script.contains("pak::pak_install"));
         assert!(script.contains("repos = getOption(\"repos\")"));
         assert!(script.contains("https://cloud.r-project.org/"));
     }
