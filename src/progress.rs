@@ -10,6 +10,12 @@ pub struct Progress {
     spinner_style: ProgressStyle,
 }
 
+impl Default for Progress {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Progress {
     /// Constructs a new [`Progress`] manager writing to stderr.
     pub fn new() -> Self {
