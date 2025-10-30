@@ -264,7 +264,7 @@ if (!requireNamespace("revdepcheck.extras", quietly = TRUE)) {{
 
 pkg_name <- {package_literal}
 
-revdeps <- revdepcheck::cran_revdeps(pkg_name, dependencies = TRUE, bioc = FALSE, cran = TRUE)
+revdeps <- revdepcheck::cran_revdeps(pkg_name, dependencies = TRUE, bioc = FALSE)
 cranpkgs <- unname(available.packages(repos = cran_repo)[, "Package"])
 cranrevdeps <- revdeps[revdeps %in% cranpkgs]
 
