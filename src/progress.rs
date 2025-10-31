@@ -80,6 +80,11 @@ impl Task {
         self.finished = true;
         self.bar.abandon_with_message(message.into());
     }
+
+    /// Returns a clone of the underlying progress bar for external updates.
+    pub fn progress_bar(&self) -> ProgressBar {
+        self.bar.clone()
+    }
 }
 
 impl Drop for Task {
