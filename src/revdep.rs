@@ -237,8 +237,7 @@ if (length(install_targets) > 0) {{
     repos = binary_repo,
     lib = library_dir,
     quiet = TRUE,
-    Ncpus = install_workers,
-    dependencies = TRUE
+    Ncpus = install_workers
   )
 }} else {{
   stop("No installation targets determined for install.packages().")
