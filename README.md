@@ -64,14 +64,19 @@ Simply point `revdeprun` at your package repository:
 revdeprun https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
 ```
 
-The tool installs the current release version of R for Ubuntu and uses
-all available CPU cores for installation and checking by default.
-System requirements for package dependencies are installed automatically.
-The checking logic follows {revdepcheck.extras} to pre-install
-reverse-dependency source packages and pre-caches their binaries,
-to reduce compilation time and "package suggested but not available" failures
-in fresh Linux environments when using vanilla {revdepcheck}.
-Results are written to `revdep/` within your repository directory.
+Sensible defaults:
+
+- The tool installs the current release version of R for Ubuntu.
+- Use all available CPU cores for installation and checking by default.
+- System requirements for package dependencies are installed automatically.
+- The checking logic follows {revdepcheck.extras} to pre-install
+  reverse dependency (and their dependency) packages first.
+  revdeprun pulls these packages from the Posit Public Package Manager (P3M)
+  binary package repo, while the actual reverse dependency checks use the
+  source package only repo to satisfy {revdepcheck}.
+- This reduces the compilation time and "package suggested but not available"
+  failures in fresh Linux environments compared to using vanilla {revdepcheck}.
+- Results are written to `revdep/` within your repository directory as usual.
 
 ### Command-line options
 
