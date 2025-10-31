@@ -219,6 +219,16 @@ revdeps <- setdiff(revdeps, base_pkgs)
 
 install_targets <- sort(unique(c(package_name, revdeps)))
 
+available_packages <- rownames(db)
+missing_packages <- setdiff(install_targets, available_packages)
+if (length(missing_packages) > 0) {{
+  message(
+    "Skipping packages not available from repository: ",
+    paste(missing_packages, collapse = ", ")
+  )
+}}
+install_targets <- setdiff(install_targets, missing_packages)
+
 dependency_kinds <- c("Depends", "Imports", "LinkingTo", "Suggests")
 dependency_map <- tools::package_dependencies(
   packages = install_targets,
@@ -228,6 +238,7 @@ dependency_map <- tools::package_dependencies(
 )
 extra_deps <- unique(unlist(dependency_map, use.names = FALSE))
 extra_deps <- extra_deps[!is.na(extra_deps) & nzchar(extra_deps)]
+extra_deps <- intersect(extra_deps, available_packages)
 extra_deps <- setdiff(extra_deps, c(base_pkgs, install_targets))
 install_targets <- sort(unique(c(install_targets, extra_deps)))
 
@@ -381,6 +392,7 @@ mod tests {
         assert!(script.contains("install_targets <- sort(unique(c(package_name, revdeps)))"));
         assert!(script.contains("dependency_map <- tools::package_dependencies("));
         assert!(script.contains("paste0(\"any::\", install_targets)"));
+        assert!(script.contains("Skipping packages not available from repository"));
         assert!(script.contains("setwd('/tmp/example')"));
     }
 
