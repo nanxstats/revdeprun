@@ -414,7 +414,7 @@ if (!nzchar(Sys.getenv("R_REVDEPCHECK_NUM_WORKERS"))) {{
   Sys.setenv(R_REVDEPCHECK_NUM_WORKERS = as.character({workers}))
 }}
 if (!nzchar(Sys.getenv("R_REVDEPCHECK_TIMEOUT"))) {{
-  Sys.setenv(R_REVDEPCHECK_TIMEOUT = "720")
+  Sys.setenv(R_REVDEPCHECK_TIMEOUT = "60")
 }}
 Sys.setenv(R_BIOC_VERSION = as.character(BiocManager::version()))
 
@@ -474,7 +474,7 @@ if (!nzchar(Sys.getenv("R_REVDEPCHECK_NUM_WORKERS"))) {{
   Sys.setenv(R_REVDEPCHECK_NUM_WORKERS = as.character({workers}))
 }}
 if (!nzchar(Sys.getenv("R_REVDEPCHECK_TIMEOUT"))) {{
-  Sys.setenv(R_REVDEPCHECK_TIMEOUT = "720")
+  Sys.setenv(R_REVDEPCHECK_TIMEOUT = "60")
 }}
 Sys.setenv(R_BIOC_VERSION = as.character(BiocManager::version()))
 
