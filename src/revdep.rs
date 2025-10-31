@@ -200,9 +200,33 @@ fn parse_revdep_prepare_summary(progress: &Progress, stdout: &[u8]) -> Result<Pr
     if trimmed.is_empty() {
         bail!("revdep metadata preparation returned no summary output");
     }
-    serde_json::from_str(trimmed).map_err(|err| {
+
+    // Try parsing the entire payload first, but fall back to the last line when
+    // `revdep_preinstall()` prints progress to stdout ahead of the JSON.
+    let mut parse_error = match serde_json::from_str(trimmed) {
+        Ok(summary) => return Ok(summary),
+        Err(err) => err,
+    };
+
+    if let Some(candidate) = trimmed.lines().rev().find_map(|line| {
+        let line = line.trim();
+        if line.is_empty() || !line.starts_with('{') {
+            None
+        } else {
+            Some(line)
+        }
+    }) {
+        if candidate != trimmed {
+            match serde_json::from_str(candidate) {
+                Ok(summary) => return Ok(summary),
+                Err(err) => parse_error = err,
+            }
+        }
+    }
+
+    Err({
         util::emit_command_output(progress, "revdep metadata summary (raw)", stdout, b"");
-        err.into()
+        parse_error.into()
     })
 }
 
@@ -560,5 +584,25 @@ mod tests {
         assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains(".libPaths(c(user_lib, .libPaths()))"));
         assert!(script.contains("https://cloud.r-project.org/"));
+    }
+
+    #[test]
+    fn parse_summary_handles_preinstall_logs() {
+        let progress = crate::progress::Progress::new();
+        let payload = br#"
+* installing *source* package 'survivalSL' ...
+** testing if installed package can be loaded
+* DONE (survivalSL)
+{"todo_count":2,"precache_failed":["pkgA","pkgB"],"warnings":["installation of 2 packages failed:  'textshaping', 'ragg'"]}
+"#;
+
+        let summary =
+            parse_revdep_prepare_summary(&progress, payload).expect("should parse summary JSON");
+        assert_eq!(summary.todo_count, 2);
+        assert_eq!(summary.precache_failed, ["pkgA", "pkgB"]);
+        assert_eq!(
+            summary.warnings,
+            ["installation of 2 packages failed:  'textshaping', 'ragg'"]
+        );
     }
 }
