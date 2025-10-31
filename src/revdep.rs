@@ -279,15 +279,23 @@ options(
 )
 Sys.setenv(NOT_CRAN = "true")
 
-if (!requireNamespace("xfun", quietly = TRUE)) {{
-  install.packages(
-    "xfun",
-    repos = source_repo,
-    lib = library_dir,
-    quiet = TRUE,
-    Ncpus = install_workers
-  )
+ensure_installed <- function(pkg) {{
+  if (!requireNamespace(pkg, quietly = TRUE)) {{
+    install.packages(
+      pkg,
+      repos = source_repo,
+      lib = library_dir,
+      quiet = TRUE,
+      Ncpus = install_workers
+    )
+  }}
 }}
+
+ensure_installed("xfun")
+ensure_installed("markdown")
+ensure_installed("rmarkdown")
+
+options(xfun.rev_check.summary = TRUE)
 
 package_name <- read.dcf("DESCRIPTION", fields = "Package")[1, 1]
 if (!nzchar(package_name)) {{
@@ -405,6 +413,9 @@ mod tests {
         assert!(script.contains("xfun::rev_check"));
         assert!(script.contains("src = \".\""));
         assert!(script.contains("mc.cores = install_workers"));
+        assert!(script.contains("ensure_installed(\"markdown\")"));
+        assert!(script.contains("ensure_installed(\"rmarkdown\")"));
+        assert!(script.contains("options(xfun.rev_check.summary = TRUE)"));
         assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains("library_dir <- file.path(revdep_dir, \"library\")"));
     }
