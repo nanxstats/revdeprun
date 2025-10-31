@@ -219,6 +219,18 @@ revdeps <- setdiff(revdeps, base_pkgs)
 
 install_targets <- sort(unique(c(package_name, revdeps)))
 
+dependency_kinds <- c("Depends", "Imports", "LinkingTo", "Suggests")
+dependency_map <- tools::package_dependencies(
+  packages = install_targets,
+  db = db,
+  which = dependency_kinds,
+  recursive = TRUE
+)
+extra_deps <- unique(unlist(dependency_map, use.names = FALSE))
+extra_deps <- extra_deps[!is.na(extra_deps) & nzchar(extra_deps)]
+extra_deps <- setdiff(extra_deps, c(base_pkgs, install_targets))
+install_targets <- sort(unique(c(install_targets, extra_deps)))
+
 if (length(revdeps) == 0) {{
   message("No CRAN reverse dependencies detected; installing package binary only.")
 }}
@@ -367,6 +379,7 @@ mod tests {
         assert!(script.contains("ensure_installed(\"pak\")"));
         assert!(script.contains("pak::pkg_install"));
         assert!(script.contains("install_targets <- sort(unique(c(package_name, revdeps)))"));
+        assert!(script.contains("dependency_map <- tools::package_dependencies("));
         assert!(script.contains("paste0(\"any::\", install_targets)"));
         assert!(script.contains("setwd('/tmp/example')"));
     }
