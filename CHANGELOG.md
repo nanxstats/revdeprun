@@ -4,15 +4,12 @@
 
 ### Improvements
 
-- Replace the {revdepcheck} invocation with Henrik Bengtsson's
-  {revdepcheck.extras} to enable cached package downloads plus pre-installation
+- Replace the `revdepcheck` invocation with Henrik Bengtsson's
+  `revdepcheck.extras`, enabling cached package downloads plus pre-installation
   of reverse dependencies to reduce "package suggested but not available"
   failures on freshly provisioned machines.
-- Use the Posit Public Package Manager (P3M) binary repositories during the
-  reverse dependency pre-install phase while keeping the source-only mirror
-  for the actual revdep check run, to accelerate large precache steps.
-- Install revdepcheck.extras during system requirement resolution so its
-  bundled revdepcheck fork is used consistently across the workflow.
+- Install `revdepcheck.extras` during system requirement resolution so the
+  bundled `revdepcheck` fork is used consistently across the workflow.
 
 ## revdeprun 0.5.0
 

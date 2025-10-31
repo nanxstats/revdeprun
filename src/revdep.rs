@@ -446,9 +446,6 @@ if (length(todo_pkgs) > 0) {{
   ))
   summary$precache_failed <- precache_failures
 
-  old_repos <- getOption("repos")
-  options(repos = binary_cran_repos)
-
   suppressWarnings(withCallingHandlers(
     suppressMessages(revdepcheck.extras::revdep_preinstall(
       todo_pkgs,
@@ -456,8 +453,6 @@ if (length(todo_pkgs) > 0) {{
     )),
     warning = handler
   ))
-
-  options(repos = old_repos)
 }}
 
 cat(jsonlite::toJSON(summary, auto_unbox = TRUE))
@@ -498,42 +493,11 @@ fn script_prelude(repo_path: &Path, num_workers: usize) -> String {
         r#"
 setwd({path_literal})
 
-source_cran_repo <- "https://packagemanager.posit.co/cran/latest"
-binary_cran_repo <- source_cran_repo
-
-ubuntu_codename <- Sys.getenv("UBUNTU_CODENAME")
-if (!nzchar(ubuntu_codename)) {{
-  os_release <- tryCatch(readLines("/etc/os-release"), error = function(e) character())
-  codename_line <- grep("^UBUNTU_CODENAME=", os_release, value = TRUE)
-  if (length(codename_line) > 0) {{
-    ubuntu_codename <- sub("^UBUNTU_CODENAME=", "", codename_line[[1]])
-  }} else {{
-    version_line <- grep("^VERSION_CODENAME=", os_release, value = TRUE)
-    if (length(version_line) > 0) {{
-      ubuntu_codename <- sub("^VERSION_CODENAME=", "", version_line[[1]])
-    }}
-  }}
-}}
-if (!nzchar(ubuntu_codename)) {{
-  lsb_release <- tryCatch(system("lsb_release -cs", intern = TRUE), error = function(e) character())
-  if (length(lsb_release) > 0 && nzchar(lsb_release[[1]])) {{
-    ubuntu_codename <- lsb_release[[1]]
-  }}
-}}
-ubuntu_codename <- tolower(trimws(ubuntu_codename))
-if (nzchar(ubuntu_codename)) {{
-  binary_cran_repo <- sprintf(
-    "https://packagemanager.posit.co/cran/__linux__/%s/latest",
-    ubuntu_codename
-  )
-}}
-
-source_cran_repos <- c(CRAN = source_cran_repo)
-binary_cran_repos <- c(CRAN = binary_cran_repo)
+cran_repo <- "https://cloud.r-project.org/"
 install_workers <- max({workers}, parallel::detectCores())
 
 options(
-  repos = source_cran_repos,
+  repos = c(CRAN = cran_repo),
   BioC_mirror = "https://packagemanager.posit.co/bioconductor",
   Ncpus = install_workers
 )
@@ -566,10 +530,7 @@ mod tests {
         assert!(script.contains("quiet = TRUE"));
         assert!(script.contains("HenrikBengtsson/revdepcheck.extras"));
         assert!(script.contains("repos = getOption(\"repos\")"));
-        assert!(
-            script.contains("source_cran_repo <- \"https://packagemanager.posit.co/cran/latest\"")
-        );
-        assert!(script.contains("binary_cran_repos <- c(CRAN = binary_cran_repo)"));
+        assert!(script.contains("https://cloud.r-project.org/"));
         assert!(script.contains("parallel::detectCores"));
     }
 
@@ -585,8 +546,6 @@ mod tests {
         assert!(script.contains("revdepcheck::revdep_add"));
         assert!(script.contains("todo_pkgs <- revdepcheck.extras::todo"));
         assert!(script.contains("chunk_size = install_workers"));
-        assert!(script.contains("options(repos = binary_cran_repos)"));
-        assert!(script.contains("options(repos = old_repos)"));
     }
 
     #[test]
@@ -600,8 +559,6 @@ mod tests {
         assert!(script.contains("num_workers = 8"));
         assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains(".libPaths(c(user_lib, .libPaths()))"));
-        assert!(
-            script.contains("source_cran_repo <- \"https://packagemanager.posit.co/cran/latest\"")
-        );
+        assert!(script.contains("https://cloud.r-project.org/"));
     }
 }
