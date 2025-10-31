@@ -11,7 +11,7 @@
   This might reduce "package suggested but not available" errors when
   running revdepcheck. It may also reduce potential repeated compilation of
   the same dependency across different revdeps due to the "caching dependencies
-  while checking multiple pacakges" mechanism.
+  while checking multiple packages" mechanism.
 
 ### Improvements
 
