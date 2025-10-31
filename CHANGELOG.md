@@ -1,15 +1,26 @@
 # Changelog
 
-## Unreleased
+## revdeprun 0.6.0
+
+### Significant changes
+
+- Migrate from {revdepcheck} to Henrik Bengtsson's {revdepcheck.extras},
+  which provides deterministic pre-installation and caching for
+  revdep dependencies (#42).
+
+  This might reduce "package suggested but not available" errors when
+  running revdepcheck. It may also reduce potential repeated compilation of
+  the same dependency across different revdeps due to the "caching dependencies
+  while checking multiple pacakges" mechanism.
 
 ### Improvements
 
-- Replace the `revdepcheck` invocation with Henrik Bengtsson's
-  `revdepcheck.extras`, enabling cached package downloads plus pre-installation
-  of reverse dependencies to reduce "package suggested but not available"
-  failures on freshly provisioned machines.
-- Install `revdepcheck.extras` during system requirement resolution so the
-  bundled `revdepcheck` fork is used consistently across the workflow.
+- Set `timeout` to the more sensible 60 minutes instead of the previous
+  12 hours. This is consistent with the default value used by
+  `revdepcheck.extras::check()`. From the documentation, `timeout` means the
+  time limit for running `R CMD check` on one version of one package (#42).
+- Deduplicate post-install commands in the system requirements script
+  to prevent redundant execution of identical post-install hooks (#41).
 
 ## revdeprun 0.5.0
 
