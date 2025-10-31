@@ -114,13 +114,13 @@ fn install_scripts(
 ) -> Result<()> {
     if install_scripts.is_empty() {
         progress.println(format!(
-            "No additional system packages required for reverse dependencies of {package_name}."
+            "No additional dependencies required for checking reverse dependencies of {package_name}."
         ));
         return Ok(());
     }
 
     progress.println(format!(
-        "Installing system packages required by reverse dependencies of {package_name}..."
+        "Installing packages required for checking reverse dependencies of {package_name}..."
     ));
     for script in install_scripts {
         let label = format!("sudo sh -c {}", script);
@@ -137,11 +137,11 @@ fn install_scripts(
             Ok(output) => {
                 task.fail(format!("{label} failed"));
                 util::emit_command_output(progress, &label, &output.stdout, &output.stderr);
-                bail!("system package installation failed: {}", label);
+                bail!("revdep dependency package installation failed: {}", label);
             }
             Err(err) => {
                 task.fail(format!("{label} failed to start"));
-                return Err(err).context("failed to execute system package installation");
+                return Err(err).context("failed to execute revdep dependency installation");
             }
         }
     }
