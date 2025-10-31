@@ -117,30 +117,18 @@ pub fn run_revdepcheck(
     let _dir_guard = shell.push_dir(repo_path);
 
     let install_task = progress.task("Installing reverse dependencies with pak");
-    let install_output = cmd!(shell, "Rscript --vanilla {install_path}")
-        .quiet()
-        .ignore_status()
-        .output();
+    let install_result = progress.suspend(|| {
+        cmd!(shell, "Rscript --vanilla {install_path}")
+            .quiet()
+            .run()
+    });
 
-    match install_output {
-        Ok(output) if output.status.success() => {
+    match install_result {
+        Ok(_) => {
             install_task.finish_with_message("Reverse dependencies installed".to_string());
         }
-        Ok(output) => {
-            install_task.fail("Failed to install reverse dependencies via pak".to_string());
-            util::emit_command_output(
-                progress,
-                "pak reverse dependency installation",
-                &output.stdout,
-                &output.stderr,
-            );
-            bail!(
-                "pak reverse dependency installation failed with status {}",
-                output.status
-            );
-        }
         Err(err) => {
-            install_task.fail("Failed to launch pak reverse dependency installation".to_string());
+            install_task.fail("Failed to install reverse dependencies via pak".to_string());
             return Err(err).context("failed to install reverse dependencies via pak");
         }
     }
