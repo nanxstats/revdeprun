@@ -251,6 +251,10 @@ ensure_installed <- function(pkg) {{
 }}
 
 ensure_installed("pak")
+ensure_installed("jsonlite")
+
+# Install optional package (pillar) for pak
+pak::pak_install_extra()
 
 pkg_name <- {package_literal}
 
