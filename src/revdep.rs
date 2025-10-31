@@ -214,22 +214,25 @@ revdeps <- tools::package_dependencies(
 
 revdeps <- sort(unique(stats::na.omit(revdeps)))
 
+base_pkgs <- unique(c(.BaseNamespaceEnv$basePackage, rownames(installed.packages(priority = "base"))))
+revdeps <- setdiff(revdeps, base_pkgs)
+
+install_targets <- sort(unique(c(package_name, revdeps)))
+
 if (length(revdeps) == 0) {{
-  message("No CRAN reverse dependencies detected; skipping pak::pkg_install().")
+  message("No CRAN reverse dependencies detected; installing package binary only.")
+}}
+
+if (length(install_targets) > 0) {{
+  pak::pkg_install(
+    paste0("any::", install_targets),
+    ask = FALSE,
+    dependencies = TRUE,
+    lib = library_dir,
+    upgrade = FALSE
+  )
 }} else {{
-  base_pkgs <- unique(c(.BaseNamespaceEnv$basePackage, rownames(installed.packages(priority = "base"))))
-  revdeps <- setdiff(revdeps, base_pkgs)
-  if (length(revdeps) == 0) {{
-    message("Reverse dependencies only included base packages; nothing to install.")
-  }} else {{
-    pak::pkg_install(
-      paste0("any::", revdeps),
-      ask = FALSE,
-      dependencies = TRUE,
-      lib = library_dir,
-      upgrade = FALSE
-    )
-  }}
+  stop("No installation targets determined for pak::pkg_install().")
 }}
 "#
     );
@@ -363,7 +366,8 @@ mod tests {
         ));
         assert!(script.contains("ensure_installed(\"pak\")"));
         assert!(script.contains("pak::pkg_install"));
-        assert!(script.contains("paste0(\"any::\", revdeps)"));
+        assert!(script.contains("install_targets <- sort(unique(c(package_name, revdeps)))"));
+        assert!(script.contains("paste0(\"any::\", install_targets)"));
         assert!(script.contains("setwd('/tmp/example')"));
     }
 
