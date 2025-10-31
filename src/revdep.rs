@@ -248,7 +248,8 @@ source_repo <- "https://packagemanager.posit.co/cran/latest"
 options(
   repos = c(CRAN = source_repo),
   BioC_mirror = "https://packagemanager.posit.co/bioconductor",
-  Ncpus = install_workers
+  Ncpus = install_workers,
+  mc.cores = install_workers
 )
 Sys.setenv(NOT_CRAN = "true")
 
@@ -267,21 +268,7 @@ if (!nzchar(package_name)) {{
   stop("Failed to read package name from DESCRIPTION")
 }}
 
-rev_check_args <- list(package_name)
-formal_names <- names(formals(xfun::rev_check))
-if (!is.null(formal_names)) {{
-  if ("src" %in% formal_names) {{
-    rev_check_args$src <- "."
-  }}
-  if ("libpath" %in% formal_names) {{
-    rev_check_args$libpath <- library_dir
-  }}
-  if ("jobs" %in% formal_names) {{
-    rev_check_args$jobs <- install_workers
-  }}
-}}
-
-results <- do.call(xfun::rev_check, rev_check_args)
+results <- xfun::rev_check(package_name, src = ".")
 invisible(results)
 "#
     );
@@ -386,8 +373,8 @@ mod tests {
         let script = build_revdep_run_script(path, 8).expect("script must build");
 
         assert!(script.contains("xfun::rev_check"));
-        assert!(script.contains("rev_check_args$src <- \".\""));
-        assert!(script.contains("rev_check_args$jobs <- install_workers"));
+        assert!(script.contains("src = \".\""));
+        assert!(script.contains("mc.cores = install_workers"));
         assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains("library_dir <- file.path(revdep_dir, \"library\")"));
     }
