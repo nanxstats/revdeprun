@@ -5,8 +5,9 @@
 ![License](https://img.shields.io/crates/l/revdeprun)
 
 A command-line tool that automates reverse dependency checking for R packages.
-Provision R on Ubuntu, configure environment context, and run {revdepcheck} via
-{revdepcheck.extras} with deterministic dependency caching in a single command.
+Provision R on Ubuntu, install system dependencies, preinstall revdep
+dependency binaries, configure environment context,
+and run `xfun::rev_check()` in a single command.
 Designed for cloud environments where you need reproducible, isolated test
 runs without tedious manual setup.
 
@@ -67,10 +68,10 @@ revdeprun https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
 The tool installs the current release version of R for Ubuntu and uses
 all available CPU cores for installation and checking by default.
 System requirements for package dependencies are installed automatically.
-The checking logic follows {revdepcheck.extras} to pre-install
-reverse-dependency source packages and pre-caches their binaries,
-to reduce compilation time and "package suggested but not available" failures
-in fresh Linux environments when using vanilla {revdepcheck}.
+Reverse dependencies are resolved with {xfun}, their CRAN binaries are
+preinstalled using {pak} into `revdep/library`, and then
+`xfun::rev_check()` runs against that library to minimise compilation time and
+avoid "package suggested but not available" failures.
 Results are written to `revdep/` within your repository directory.
 
 ### Command-line options
@@ -88,7 +89,7 @@ Options:
           [default: release]
 
       --num-workers <N>
-          Number of parallel workers for revdepcheck.extras
+          Number of parallel workers for xfun::rev_check()
           [default: number of CPU cores]
 
       --work-dir <WORK_DIR>

@@ -1,25 +1,14 @@
 use std::{
-    fs,
-    io::{self, Write},
+    env, fs,
+    io::Write,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    thread,
-    time::Duration,
 };
 
 use anyhow::{Context, Result, anyhow, bail};
-use serde::Deserialize;
 use tempfile::NamedTempFile;
 use xshell::{Shell, cmd};
 
-use crate::{
-    progress::{Progress, Task},
-    util, workspace,
-};
+use crate::{progress::Progress, util, workspace};
 
 /// Ensures a checkout of the target repository exists within `workspace`.
 ///
@@ -94,7 +83,7 @@ pub fn prepare_repository(
     workspace::canonicalized(&destination)
 }
 
-/// Runs `revdepcheck` for the repository under `repo_path`.
+/// Runs reverse dependency checks for the repository under `repo_path`.
 pub fn run_revdepcheck(
     shell: &Shell,
     workspace: &Path,
@@ -102,78 +91,66 @@ pub fn run_revdepcheck(
     num_workers: usize,
     progress: &Progress,
 ) -> Result<()> {
-    let setup_contents = build_revdep_setup_script(repo_path, num_workers)?;
-    let mut setup_script =
-        NamedTempFile::new_in(workspace).context("failed to create temporary R script file")?;
-    setup_script
-        .write_all(setup_contents.as_bytes())
-        .context("failed to write revdepcheck bootstrap script")?;
+    let codename = detect_ubuntu_codename().context("failed to detect Ubuntu release codename")?;
 
-    let prepare_contents = build_revdep_prepare_script(repo_path, num_workers)?;
+    let install_contents = build_revdep_install_script(repo_path, num_workers, &codename)?;
     let run_contents = build_revdep_run_script(repo_path, num_workers)?;
-    let mut prepare_script =
+
+    let mut install_script =
         NamedTempFile::new_in(workspace).context("failed to create temporary R script file")?;
     let mut run_script =
         NamedTempFile::new_in(workspace).context("failed to create temporary R script file")?;
-    prepare_script
-        .write_all(prepare_contents.as_bytes())
-        .context("failed to write revdep preparation script")?;
+
+    install_script
+        .write_all(install_contents.as_bytes())
+        .context("failed to write pak install script")?;
     run_script
         .write_all(run_contents.as_bytes())
-        .context("failed to write revdep execution script")?;
+        .context("failed to write reverse dependency check script")?;
 
-    let setup_path = setup_script.path().to_owned();
-    let prepare_path = prepare_script.path().to_owned();
+    let install_path = install_script.path().to_owned();
     let run_path = run_script.path().to_owned();
+
+    fs::create_dir_all(repo_path.join("revdep"))
+        .with_context(|| format!("failed to create {}", repo_path.join("revdep").display()))?;
 
     let _dir_guard = shell.push_dir(repo_path);
 
-    let bootstrap_task = progress.task("Bootstrapping revdepcheck dependencies");
-    let setup_output = cmd!(shell, "Rscript --vanilla {setup_path}")
+    let install_task = progress.task("Installing reverse dependencies with pak");
+    let install_output = cmd!(shell, "Rscript --vanilla {install_path}")
         .quiet()
         .ignore_status()
         .output();
 
-    match setup_output {
+    match install_output {
         Ok(output) if output.status.success() => {
-            bootstrap_task.finish_with_message("revdepcheck dependencies ready".to_string());
+            install_task.finish_with_message("Reverse dependencies installed".to_string());
         }
         Ok(output) => {
-            bootstrap_task.fail("Failed to prepare revdepcheck dependencies".to_string());
+            install_task.fail("Failed to install reverse dependencies via pak".to_string());
             util::emit_command_output(
                 progress,
-                "revdepcheck dependency bootstrap",
+                "pak reverse dependency installation",
                 &output.stdout,
                 &output.stderr,
             );
             bail!(
-                "revdepcheck dependency bootstrap failed with status {}",
+                "pak reverse dependency installation failed with status {}",
                 output.status
             );
         }
         Err(err) => {
-            bootstrap_task.fail("Failed to launch revdepcheck bootstrap".to_string());
-            return Err(err).context("failed to prepare revdepcheck dependencies");
+            install_task.fail("Failed to launch pak reverse dependency installation".to_string());
+            return Err(err).context("failed to install reverse dependencies via pak");
         }
     }
 
-    let prepare_summary = run_revdep_prepare_phase(
-        repo_path,
-        &prepare_path,
-        progress,
-        progress.task("Pre-installing reverse dependencies"),
-    )?;
-
-    report_prepare_summary(progress, &prepare_summary);
-
-    progress.println(format!(
-        "Launching revdepcheck.extras with {num_workers} workers..."
-    ));
+    progress.println("Launching xfun::rev_check()...");
     progress.suspend(|| {
         cmd!(shell, "Rscript --vanilla {run_path}")
             .quiet()
             .run()
-            .context("revdepcheck reported an error")
+            .context("xfun::rev_check() reported an error")
     })?;
 
     Ok(())
@@ -184,302 +161,76 @@ pub fn results_dir(repo_path: &Path) -> PathBuf {
     repo_path.join("revdep")
 }
 
-#[derive(Debug, Deserialize)]
-struct PrepareSummary {
-    todo_count: usize,
-    #[serde(default)]
-    precache_failed: Vec<String>,
-    #[serde(default)]
-    warnings: Vec<String>,
-}
-
-fn parse_revdep_prepare_summary(progress: &Progress, stdout: &[u8]) -> Result<PrepareSummary> {
-    let payload = String::from_utf8(stdout.to_vec())
-        .context("revdep metadata preparation emitted non-UTF-8 output")?;
-    let trimmed = payload.trim();
-    if trimmed.is_empty() {
-        bail!("revdep metadata preparation returned no summary output");
-    }
-
-    // Try parsing the entire payload first, but fall back to the last line when
-    // `revdep_preinstall()` prints progress to stdout ahead of the JSON.
-    let mut parse_error = match serde_json::from_str(trimmed) {
-        Ok(summary) => return Ok(summary),
-        Err(err) => err,
-    };
-
-    if let Some(candidate) = trimmed.lines().rev().find_map(|line| {
-        let line = line.trim();
-        if line.is_empty() || !line.starts_with('{') {
-            None
-        } else {
-            Some(line)
-        }
-    }) {
-        if candidate != trimmed {
-            match serde_json::from_str(candidate) {
-                Ok(summary) => return Ok(summary),
-                Err(err) => parse_error = err,
-            }
-        }
-    }
-
-    Err({
-        util::emit_command_output(progress, "revdep metadata summary (raw)", stdout, b"");
-        parse_error.into()
-    })
-}
-
-fn report_prepare_summary(progress: &Progress, summary: &PrepareSummary) {
-    if summary.todo_count == 0 {
-        progress.println(
-            "No CRAN reverse dependencies detected; revdepcheck.extras will exit immediately.",
-        );
-    } else {
-        progress.println(format!(
-            "Queued {} reverse dependencies for revdepcheck.extras.",
-            summary.todo_count
-        ));
-    }
-
-    if !summary.precache_failed.is_empty() {
-        let failed = summary.precache_failed.join(", ");
-        progress.println(format!(
-            "Warning: failed to precache {} packages: {failed}",
-            summary.precache_failed.len()
-        ));
-    }
-
-    if !summary.warnings.is_empty() {
-        for warning in &summary.warnings {
-            progress.println(format!("Warning from revdep preparation: {warning}"));
-        }
-    }
-}
-
-fn run_revdep_prepare_phase(
+fn build_revdep_install_script(
     repo_path: &Path,
-    prepare_path: &Path,
-    progress: &Progress,
-    prepare_task: Task,
-) -> Result<PrepareSummary> {
-    let progress_bar = prepare_task.progress_bar();
-
-    let mut command = Command::new("Rscript");
-    command.arg("--vanilla");
-    command.arg(prepare_path);
-    command.current_dir(repo_path);
-    command.stdout(Stdio::piped());
-    command.stderr(Stdio::piped());
-
-    let child = match command.spawn() {
-        Ok(child) => child,
-        Err(err) => {
-            prepare_task.fail("Failed to launch revdep metadata preparation".to_string());
-            return Err(err).context("failed to launch revdep metadata preparation");
-        }
-    };
-
-    let monitor = CrancacheMonitor::start(progress_bar, repo_path.to_path_buf());
-
-    let output_result = child.wait_with_output();
-    monitor.shutdown();
-
-    let output = match output_result {
-        Ok(output) => output,
-        Err(err) => {
-            prepare_task.fail("Failed to capture revdep metadata output".to_string());
-            return Err(err).context("failed to capture revdep metadata output");
-        }
-    };
-
-    if output.status.success() {
-        match parse_revdep_prepare_summary(progress, &output.stdout) {
-            Ok(summary) => {
-                prepare_task.finish_with_message("Reverse dependencies discovered".to_string());
-                Ok(summary)
-            }
-            Err(err) => {
-                prepare_task.fail("Failed to parse revdep metadata summary".to_string());
-                Err(err)
-            }
-        }
-    } else {
-        prepare_task.fail("Failed to prepare revdep metadata".to_string());
-        util::emit_command_output(
-            progress,
-            "revdep metadata preparation",
-            &output.stdout,
-            &output.stderr,
-        );
-        bail!(
-            "revdep metadata preparation failed with status {}",
-            output.status
-        );
-    }
-}
-
-struct CrancacheMonitor {
-    stop: Arc<AtomicBool>,
-    handle: thread::JoinHandle<()>,
-}
-
-impl CrancacheMonitor {
-    fn start(bar: indicatif::ProgressBar, repo_root: PathBuf) -> Self {
-        let stop = Arc::new(AtomicBool::new(false));
-        let stop_flag = stop.clone();
-        let handle = thread::spawn(move || {
-            let src_dir = repo_root.join("revdep/crancache/cran/src/contrib");
-            let bin_dir = repo_root.join("revdep/crancache/cran-bin/src/contrib");
-            let mut last_message = String::new();
-
-            while !stop_flag.load(Ordering::SeqCst) {
-                let src_count = count_cached_packages(&src_dir);
-                let bin_count = count_cached_packages(&bin_dir);
-                let message = format!(
-                    "Pre-installing reverse dependencies (cache: {src_count} src tarballs, {bin_count} binary tarballs)"
-                );
-
-                if message != last_message {
-                    bar.set_message(message.clone());
-                    last_message = message;
-                }
-
-                for _ in 0..10 {
-                    if stop_flag.load(Ordering::SeqCst) {
-                        break;
-                    }
-                    thread::sleep(Duration::from_secs(1));
-                }
-            }
-        });
-
-        Self { stop, handle }
-    }
-
-    fn shutdown(self) {
-        self.stop.store(true, Ordering::SeqCst);
-        let _ = self.handle.join();
-    }
-}
-
-const CRANCACHE_METADATA_FILES: &[&str] =
-    &["PACKAGES", "PACKAGES.db", "PACKAGES.gz", "PACKAGES.rds"];
-
-fn count_cached_packages(dir: &Path) -> usize {
-    match fs::read_dir(dir) {
-        Ok(entries) => entries
-            .filter_map(|entry| entry.ok())
-            .filter(|entry| match entry.file_type() {
-                Ok(kind) => kind.is_file(),
-                Err(_) => false,
-            })
-            .filter(|entry| {
-                entry
-                    .file_name()
-                    .to_str()
-                    .map(|name| !CRANCACHE_METADATA_FILES.contains(&name))
-                    .unwrap_or(true)
-            })
-            .count(),
-        Err(err) if err.kind() == io::ErrorKind::NotFound => 0,
-        Err(_) => 0,
-    }
-}
-
-fn build_revdep_setup_script(repo_path: &Path, num_workers: usize) -> Result<String> {
+    num_workers: usize,
+    codename: &str,
+) -> Result<String> {
     let prelude = script_prelude(repo_path, num_workers);
+    let codename_literal = util::r_string_literal(&codename.to_lowercase());
 
     let script = format!(
         r#"{prelude}
 
-if (!requireNamespace("BiocManager", quietly = TRUE)) {{
-  install.packages(
-    "BiocManager",
-    repos = getOption("repos"),
-    lib = user_lib,
-    quiet = TRUE,
-    Ncpus = install_workers
-  )
-}}
-if (!requireNamespace("pak", quietly = TRUE)) {{
-  install.packages(
-    "pak",
-    repos = getOption("repos"),
-    lib = user_lib,
-    quiet = TRUE,
-    Ncpus = install_workers
-  )
-}}
-if (!requireNamespace("revdepcheck.extras", quietly = TRUE)) {{
-  pak::pkg_install(
-    "HenrikBengtsson/revdepcheck.extras",
-    lib = user_lib,
-    ask = FALSE,
-    upgrade = FALSE,
-    dependencies = TRUE
-  )
-}}
-"#
-    );
+binary_repo <- sprintf("https://packagemanager.posit.co/cran/__linux__/%s/latest", {codename_literal})
+source_repo <- "https://packagemanager.posit.co/cran/latest"
 
-    Ok(script)
-}
-
-fn build_revdep_prepare_script(repo_path: &Path, num_workers: usize) -> Result<String> {
-    let prelude = script_prelude(repo_path, num_workers);
-    let workers = num_workers.max(1);
-
-    let script = format!(
-        r#"{prelude}
-
-options(revdepcheck.num_workers = {workers})
-if (!nzchar(Sys.getenv("R_REVDEPCHECK_NUM_WORKERS"))) {{
-  Sys.setenv(R_REVDEPCHECK_NUM_WORKERS = as.character({workers}))
-}}
-if (!nzchar(Sys.getenv("R_REVDEPCHECK_TIMEOUT"))) {{
-  Sys.setenv(R_REVDEPCHECK_TIMEOUT = "60")
-}}
-Sys.setenv(R_BIOC_VERSION = as.character(BiocManager::version()))
-
-revdepcheck.extras::revdep_reset(".")
-revdepcheck.extras::revdep_init(".")
-
-children <- revdepcheck.extras::revdep_children(".")
-if (length(children) > 0) {{
-  revdepcheck::revdep_add(".", packages = children)
-}}
-
-todo_pkgs <- revdepcheck.extras::todo(".", print = FALSE)
-
-summary <- list(
-  todo_count = length(todo_pkgs),
-  precache_failed = character(),
-  warnings = character()
+options(
+  repos = c(posit = binary_repo),
+  BioC_mirror = "https://packagemanager.posit.co/bioconductor",
+  Ncpus = install_workers
 )
+Sys.setenv(NOT_CRAN = "true")
 
-if (length(todo_pkgs) > 0) {{
-  handler <- function(w) {{
-    summary$warnings <<- c(summary$warnings, conditionMessage(w))
-    invokeRestart("muffleWarning")
+ensure_installed <- function(pkg, repo = source_repo) {{
+  if (!requireNamespace(pkg, quietly = TRUE)) {{
+    install.packages(
+      pkg,
+      repos = repo,
+      lib = library_dir,
+      quiet = TRUE,
+      Ncpus = install_workers
+    )
   }}
-
-  precache_failures <- suppressWarnings(withCallingHandlers(
-    suppressMessages(revdepcheck.extras::revdep_precache(package = ".")),
-    warning = handler
-  ))
-  summary$precache_failed <- precache_failures
-
-  suppressWarnings(withCallingHandlers(
-    suppressMessages(revdepcheck.extras::revdep_preinstall(
-      todo_pkgs,
-      chunk_size = install_workers
-    )),
-    warning = handler
-  ))
 }}
 
-cat(jsonlite::toJSON(summary, auto_unbox = TRUE))
+ensure_installed("pak")
+ensure_installed("xfun")
+
+pak::repo_add(posit = binary_repo)
+
+package_name <- read.dcf("DESCRIPTION", fields = "Package")[1, 1]
+if (!nzchar(package_name)) {{
+  stop("Failed to read package name from DESCRIPTION")
+}}
+
+db <- available.packages(repos = source_repo, type = "source")
+revdeps <- tools::package_dependencies(
+  packages = package_name,
+  db = db,
+  which = c("Depends", "Imports", "LinkingTo", "Suggests"),
+  reverse = TRUE
+)[[package_name]]
+
+revdeps <- sort(unique(stats::na.omit(revdeps)))
+
+if (length(revdeps) == 0) {{
+  message("No CRAN reverse dependencies detected; skipping pak::pkg_install().")
+}} else {{
+  base_pkgs <- unique(c(.BaseNamespaceEnv$basePackage, rownames(installed.packages(priority = "base"))))
+  revdeps <- setdiff(revdeps, base_pkgs)
+  if (length(revdeps) == 0) {{
+    message("Reverse dependencies only included base packages; nothing to install.")
+  }} else {{
+    pak::pkg_install(
+      paste0("any::", revdeps),
+      ask = FALSE,
+      dependencies = TRUE,
+      lib = library_dir,
+      upgrade = FALSE
+    )
+  }}
+}}
 "#
     );
 
@@ -488,21 +239,50 @@ cat(jsonlite::toJSON(summary, auto_unbox = TRUE))
 
 fn build_revdep_run_script(repo_path: &Path, num_workers: usize) -> Result<String> {
     let prelude = script_prelude(repo_path, num_workers);
-    let workers = num_workers.max(1);
 
     let script = format!(
         r#"{prelude}
 
-options(revdepcheck.num_workers = {workers})
-if (!nzchar(Sys.getenv("R_REVDEPCHECK_NUM_WORKERS"))) {{
-  Sys.setenv(R_REVDEPCHECK_NUM_WORKERS = as.character({workers}))
-}}
-if (!nzchar(Sys.getenv("R_REVDEPCHECK_TIMEOUT"))) {{
-  Sys.setenv(R_REVDEPCHECK_TIMEOUT = "60")
-}}
-Sys.setenv(R_BIOC_VERSION = as.character(BiocManager::version()))
+source_repo <- "https://packagemanager.posit.co/cran/latest"
 
-revdepcheck.extras::run()
+options(
+  repos = c(CRAN = source_repo),
+  BioC_mirror = "https://packagemanager.posit.co/bioconductor",
+  Ncpus = install_workers
+)
+Sys.setenv(NOT_CRAN = "true")
+
+if (!requireNamespace("xfun", quietly = TRUE)) {{
+  install.packages(
+    "xfun",
+    repos = source_repo,
+    lib = library_dir,
+    quiet = TRUE,
+    Ncpus = install_workers
+  )
+}}
+
+package_name <- read.dcf("DESCRIPTION", fields = "Package")[1, 1]
+if (!nzchar(package_name)) {{
+  stop("Failed to read package name from DESCRIPTION")
+}}
+
+rev_check_args <- list(package_name)
+formal_names <- names(formals(xfun::rev_check))
+if (!is.null(formal_names)) {{
+  if ("src" %in% formal_names) {{
+    rev_check_args$src <- "."
+  }}
+  if ("libpath" %in% formal_names) {{
+    rev_check_args$libpath <- library_dir
+  }}
+  if ("jobs" %in% formal_names) {{
+    rev_check_args$jobs <- install_workers
+  }}
+}}
+
+results <- do.call(xfun::rev_check, rev_check_args)
+invisible(results)
 "#
     );
 
@@ -517,28 +297,68 @@ fn script_prelude(repo_path: &Path, num_workers: usize) -> String {
         r#"
 setwd({path_literal})
 
-cran_repo <- "https://cloud.r-project.org/"
+revdep_dir <- file.path("revdep")
+dir.create(revdep_dir, recursive = TRUE, showWarnings = FALSE)
+
+library_dir <- file.path(revdep_dir, "library")
+dir.create(library_dir, recursive = TRUE, showWarnings = FALSE)
+
+Sys.setenv(R_LIBS_USER = library_dir)
+.libPaths(c(library_dir, .libPaths()))
+
 install_workers <- max({workers}, parallel::detectCores())
-
-options(
-  repos = c(CRAN = cran_repo),
-  BioC_mirror = "https://packagemanager.posit.co/bioconductor",
-  Ncpus = install_workers
-)
-Sys.setenv(NOT_CRAN = "true")
-
-user_lib <- Sys.getenv("R_LIBS_USER")
-if (!nzchar(user_lib)) {{
-  stop('R_LIBS_USER is empty; cannot install packages into user library')
-}}
-dir.create(user_lib, recursive = TRUE, showWarnings = FALSE)
-.libPaths(c(user_lib, .libPaths()))
-
-crancache_dir <- file.path("revdep", "crancache")
-dir.create(crancache_dir, recursive = TRUE, showWarnings = FALSE)
-Sys.setenv(CRANCACHE_DIR = crancache_dir)
+options(Ncpus = install_workers)
 "#
     )
+}
+
+fn detect_ubuntu_codename() -> Result<String> {
+    if let Ok(value) = env::var("REVDEPRUN_UBUNTU_CODENAME") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return Ok(trimmed.to_lowercase());
+        }
+    }
+
+    let contents =
+        fs::read_to_string("/etc/os-release").context("failed to read /etc/os-release")?;
+
+    if let Some(codename) = ubuntu_codename_from_os_release(&contents) {
+        return Ok(codename);
+    }
+
+    bail!("VERSION_CODENAME not found in /etc/os-release")
+}
+
+fn ubuntu_codename_from_os_release(contents: &str) -> Option<String> {
+    let mut fallback = None;
+
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') || !line.contains('=') {
+            continue;
+        }
+        let (key, value) = line.split_once('=')?;
+        let key = key.trim();
+        let mut value = value
+            .trim()
+            .trim_matches('"')
+            .trim_matches('\'')
+            .to_string();
+        if value.is_empty() {
+            continue;
+        }
+        value = value.to_lowercase();
+
+        if key == "VERSION_CODENAME" {
+            return Some(value);
+        }
+        if key == "UBUNTU_CODENAME" {
+            fallback = Some(value);
+        }
+    }
+
+    fallback
 }
 
 #[cfg(test)]
@@ -546,63 +366,41 @@ mod tests {
     use super::*;
 
     #[test]
-    fn build_setup_script_installs_dependencies_quietly() {
+    fn build_install_script_uses_binary_repo() {
         let path = Path::new("/tmp/example");
-        let script = build_revdep_setup_script(path, 8).expect("script must build");
+        let script = build_revdep_install_script(path, 8, "noble").expect("script must build");
 
-        assert!(script.contains("install.packages("));
-        assert!(script.contains("quiet = TRUE"));
-        assert!(script.contains("HenrikBengtsson/revdepcheck.extras"));
-        assert!(script.contains("repos = getOption(\"repos\")"));
-        assert!(script.contains("https://cloud.r-project.org/"));
-        assert!(script.contains("parallel::detectCores"));
+        assert!(script.contains("https://packagemanager.posit.co/cran/__linux__/%s/latest"));
+        assert!(script.contains(
+            "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", 'noble')"
+        ));
+        assert!(script.contains("ensure_installed(\"pak\")"));
+        assert!(script.contains("pak::pkg_install"));
+        assert!(script.contains("paste0(\"any::\", revdeps)"));
+        assert!(script.contains("setwd('/tmp/example')"));
     }
 
     #[test]
-    fn build_prepare_script_summarises_work() {
-        let path = Path::new("/tmp/example");
-        let script = build_revdep_prepare_script(path, 8).expect("script must build");
-
-        assert!(script.contains("revdepcheck.extras::revdep_precache"));
-        assert!(script.contains("revdepcheck.extras::revdep_preinstall"));
-        assert!(script.contains("suppressMessages"));
-        assert!(script.contains("jsonlite::toJSON"));
-        assert!(script.contains("revdepcheck::revdep_add"));
-        assert!(script.contains("todo_pkgs <- revdepcheck.extras::todo"));
-        assert!(script.contains("chunk_size = install_workers"));
-    }
-
-    #[test]
-    fn build_run_script_triggers_revdepcheck() {
+    fn build_run_script_invokes_xfun() {
         let path = Path::new("/tmp/example");
         let script = build_revdep_run_script(path, 8).expect("script must build");
 
-        assert!(script.contains("revdepcheck.extras::run"));
-        assert!(script.contains("R_REVDEPCHECK_NUM_WORKERS"));
-        assert!(script.contains("R_REVDEPCHECK_TIMEOUT"));
-        assert!(script.contains("num_workers = 8"));
+        assert!(script.contains("xfun::rev_check"));
+        assert!(script.contains("rev_check_args$src <- \".\""));
+        assert!(script.contains("rev_check_args$jobs <- install_workers"));
         assert!(script.contains("setwd('/tmp/example')"));
-        assert!(script.contains(".libPaths(c(user_lib, .libPaths()))"));
-        assert!(script.contains("https://cloud.r-project.org/"));
+        assert!(script.contains("library_dir <- file.path(revdep_dir, \"library\")"));
     }
 
     #[test]
-    fn parse_summary_handles_preinstall_logs() {
-        let progress = crate::progress::Progress::new();
-        let payload = br#"
-* installing *source* package 'survivalSL' ...
-** testing if installed package can be loaded
-* DONE (survivalSL)
-{"todo_count":2,"precache_failed":["pkgA","pkgB"],"warnings":["installation of 2 packages failed:  'textshaping', 'ragg'"]}
+    fn parses_codename_from_os_release() {
+        let contents = r#"
+NAME="Ubuntu"
+VERSION="24.04 LTS (Noble Nimbus)"
+VERSION_CODENAME=noble
+UBUNTU_CODENAME=noble
 "#;
-
-        let summary =
-            parse_revdep_prepare_summary(&progress, payload).expect("should parse summary JSON");
-        assert_eq!(summary.todo_count, 2);
-        assert_eq!(summary.precache_failed, ["pkgA", "pkgB"]);
-        assert_eq!(
-            summary.warnings,
-            ["installation of 2 packages failed:  'textshaping', 'ragg'"]
-        );
+        let codename = ubuntu_codename_from_os_release(contents);
+        assert_eq!(codename.as_deref(), Some("noble"));
     }
 }

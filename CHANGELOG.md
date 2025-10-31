@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Significant changes
+
+- Replace the {revdepcheck.extras} workflow with a pak-driven binary
+  pre-installation phase followed by `xfun::rev_check()`, which installs
+  reverse dependency binaries from Posit Package Manager (P3M) into
+  `revdep/library` before running the checks. This dramatically shortens
+  the pre-install phase while keeping checks deterministic.
+
 ## revdeprun 0.6.0
 
 ### Significant changes

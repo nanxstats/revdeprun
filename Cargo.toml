@@ -2,7 +2,7 @@
 name = "revdeprun"
 version = "0.6.0"
 edition = "2024"
-description = "One-key reverse dependency checks for R via revdepcheck.extras with cloud-ready environment setup"
+description = "Easy reverse dependency checks for R with cloud-ready environment setup"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/nanxstats/revdeprun"
