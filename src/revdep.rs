@@ -234,7 +234,7 @@ dependency_map <- tools::package_dependencies(
   packages = install_targets,
   db = db,
   which = dependency_kinds,
-  recursive = TRUE
+  recursive = FALSE
 )
 extra_deps <- unique(unlist(dependency_map, use.names = FALSE))
 extra_deps <- extra_deps[!is.na(extra_deps) & nzchar(extra_deps)]
@@ -391,6 +391,7 @@ mod tests {
         assert!(script.contains("pak::pkg_install"));
         assert!(script.contains("install_targets <- sort(unique(c(package_name, revdeps)))"));
         assert!(script.contains("dependency_map <- tools::package_dependencies("));
+        assert!(script.contains("recursive = FALSE"));
         assert!(script.contains("paste0(\"any::\", install_targets)"));
         assert!(script.contains("Skipping packages not available from repository"));
         assert!(script.contains("setwd('/tmp/example')"));
