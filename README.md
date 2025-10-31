@@ -69,8 +69,8 @@ The tool installs the current release version of R for Ubuntu and uses
 all available CPU cores for installation and checking by default.
 System requirements for package dependencies are installed automatically.
 Reverse dependencies are resolved with {xfun}, their CRAN binaries are
-preinstalled using {pak} into `revdep/library`, and then
-`xfun::rev_check()` runs against that library to minimise compilation time and
+preinstalled into `revdep/library`, and then `xfun::rev_check()`
+runs against that library to minimise compilation time and
 avoid "package suggested but not available" failures.
 Results are written to `revdep/` within your repository directory.
 

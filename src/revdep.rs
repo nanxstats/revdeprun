@@ -103,7 +103,7 @@ pub fn run_revdepcheck(
 
     install_script
         .write_all(install_contents.as_bytes())
-        .context("failed to write pak install script")?;
+        .context("failed to write revdep dependencies install script")?;
     run_script
         .write_all(run_contents.as_bytes())
         .context("failed to write reverse dependency check script")?;
@@ -116,7 +116,7 @@ pub fn run_revdepcheck(
 
     let _dir_guard = shell.push_dir(repo_path);
 
-    let install_task = progress.task("Installing reverse dependencies with pak");
+    let install_task = progress.task("Installing revdep dependencies");
     let install_result = progress.suspend(|| {
         cmd!(shell, "Rscript --vanilla {install_path}")
             .quiet()
@@ -128,8 +128,8 @@ pub fn run_revdepcheck(
             install_task.finish_with_message("Reverse dependencies installed".to_string());
         }
         Err(err) => {
-            install_task.fail("Failed to install reverse dependencies via pak".to_string());
-            return Err(err).context("failed to install reverse dependencies via pak");
+            install_task.fail("Failed to install revdep dependencies".to_string());
+            return Err(err).context("failed to install revdep dependencies");
         }
     }
 
@@ -182,10 +182,7 @@ ensure_installed <- function(pkg, repo = source_repo) {{
   }}
 }}
 
-ensure_installed("pak")
 ensure_installed("xfun")
-
-pak::repo_add(posit = binary_repo)
 
 package_name <- read.dcf("DESCRIPTION", fields = "Package")[1, 1]
 if (!nzchar(package_name)) {{
@@ -235,15 +232,16 @@ if (length(revdeps) == 0) {{
 }}
 
 if (length(install_targets) > 0) {{
-  pak::pkg_install(
-    paste0("any::", install_targets),
-    ask = FALSE,
-    dependencies = TRUE,
+  install.packages(
+    install_targets,
+    repos = binary_repo,
     lib = library_dir,
-    upgrade = FALSE
+    quiet = TRUE,
+    Ncpus = install_workers,
+    dependencies = TRUE
   )
 }} else {{
-  stop("No installation targets determined for pak::pkg_install().")
+  stop("No installation targets determined for install.packages().")
 }}
 "#
     );
@@ -383,12 +381,11 @@ mod tests {
         assert!(script.contains(
             "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", 'noble')"
         ));
-        assert!(script.contains("ensure_installed(\"pak\")"));
-        assert!(script.contains("pak::pkg_install"));
+        assert!(script.contains("install.packages("));
         assert!(script.contains("install_targets <- sort(unique(c(package_name, revdeps)))"));
         assert!(script.contains("dependency_map <- tools::package_dependencies("));
         assert!(script.contains("recursive = FALSE"));
-        assert!(script.contains("paste0(\"any::\", install_targets)"));
+        assert!(script.contains("repos = binary_repo"));
         assert!(script.contains("Skipping packages not available from repository"));
         assert!(script.contains("setwd('/tmp/example')"));
     }
