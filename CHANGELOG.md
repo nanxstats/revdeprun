@@ -6,7 +6,7 @@
 
 - Replace the {revdepcheck.extras} workflow with a binary pre-installation
   phase followed by `xfun::rev_check()`, which installs reverse dependency
-  (and their dependencies) from from Posit Package Manager (P3M) into
+  (and their dependencies) from Posit Package Manager (P3M) into
   `revdep/library` before running the checks. This dramatically shortens
   the pre-install phase while keeping checks deterministic.
 
