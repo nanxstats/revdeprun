@@ -52,6 +52,18 @@ pub fn emit_command_output(progress: &Progress, label: &str, stdout: &[u8], stde
     emit_stream(progress, label, "stderr", stderr);
 }
 
+/// Computes the appropriate value for R's `--max-connections` flag given the
+/// available CPU count.
+///
+/// The calculation follows the rule:
+///   max_connections = min(4096, ceil(max(128, 3 * Ncpus + 64) / 128) * 128)
+pub fn optimal_max_connections(num_cpus: usize) -> usize {
+    let cpus = num_cpus.max(1) as u64;
+    let base = (3 * cpus + 64).max(128);
+    let rounded = ((base + 127) / 128) * 128;
+    rounded.min(4096) as usize
+}
+
 fn emit_stream(progress: &Progress, label: &str, stream: &str, bytes: &[u8]) {
     if bytes.is_empty() {
         return;
@@ -86,5 +98,16 @@ mod tests {
             Some("ggsci".to_string())
         );
         assert_eq!(guess_repo_name(""), None);
+    }
+
+    #[test]
+    fn computes_max_connections() {
+        assert_eq!(optimal_max_connections(16), 128);
+        assert_eq!(optimal_max_connections(32), 256);
+        assert_eq!(optimal_max_connections(128), 512);
+        assert_eq!(optimal_max_connections(256), 896);
+        assert_eq!(optimal_max_connections(384), 1280);
+        assert_eq!(optimal_max_connections(1024), 3200);
+        assert_eq!(optimal_max_connections(2000), 4096);
     }
 }

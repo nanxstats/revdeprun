@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Improvements
+
+- Launch `Rscript` with an auto-tuned `--max-connections` value based
+  on the CPU core count to avoid potential connection limits during parallel
+  reverse dependency checks on high-CPU instances.
+
 ## revdeprun 1.0.0
 
 ### Significant changes

@@ -48,6 +48,7 @@ pub fn install_reverse_dep_sysreqs(
     num_workers: usize,
     progress: &Progress,
 ) -> Result<()> {
+    let max_connections = util::optimal_max_connections(num_workers);
     let package_name = read_package_name(repo_path)?;
     let script_contents = build_sysreqs_script(&package_name, num_workers)?;
     let mut script = NamedTempFile::new_in(workspace.temp_dir())
@@ -62,10 +63,14 @@ pub fn install_reverse_dep_sysreqs(
     let task = progress.task(format!(
         "Resolving system requirements for reverse dependencies of {package_name}"
     ));
-    let output = cmd!(shell, "Rscript --vanilla {script_path}")
-        .quiet()
-        .ignore_status()
-        .output();
+    let max_connections_arg = max_connections.to_string();
+    let output = cmd!(
+        shell,
+        "Rscript --vanilla --max-connections={max_connections_arg} {script_path}"
+    )
+    .quiet()
+    .ignore_status()
+    .output();
 
     let output = match output {
         Ok(output) if output.status.success() => {
