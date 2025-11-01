@@ -114,13 +114,13 @@ fn install_scripts(
 ) -> Result<()> {
     if install_scripts.is_empty() {
         progress.println(format!(
-            "No additional system packages required for reverse dependencies of {package_name}."
+            "No additional dependencies required for checking reverse dependencies of {package_name}."
         ));
         return Ok(());
     }
 
     progress.println(format!(
-        "Installing system packages required by reverse dependencies of {package_name}..."
+        "Installing packages required for checking reverse dependencies of {package_name}..."
     ));
     for script in install_scripts {
         let label = format!("sudo sh -c {}", script);
@@ -137,11 +137,11 @@ fn install_scripts(
             Ok(output) => {
                 task.fail(format!("{label} failed"));
                 util::emit_command_output(progress, &label, &output.stdout, &output.stderr);
-                bail!("system package installation failed: {}", label);
+                bail!("revdep dependency package installation failed: {}", label);
             }
             Err(err) => {
                 task.fail(format!("{label} failed to start"));
-                return Err(err).context("failed to execute system package installation");
+                return Err(err).context("failed to execute revdep dependency installation");
             }
         }
     }
@@ -222,10 +222,10 @@ fn build_sysreqs_script(package_name: &str, num_workers: usize) -> Result<String
         r#"
 options(warn = 2)
 
-cran_repo <- "https://cloud.r-project.org/"
+source_repo <- "https://packagemanager.posit.co/cran/latest"
 
 options(
-  repos = c(CRAN = cran_repo),
+  repos = c(CRAN = source_repo),
   BioC_mirror = "https://packagemanager.posit.co/bioconductor",
   Ncpus = {workers}
 )
@@ -251,27 +251,30 @@ ensure_installed <- function(pkg) {{
 }}
 
 ensure_installed("pak")
-
-if (!requireNamespace("revdepcheck.extras", quietly = TRUE)) {{
-  pak::pkg_install(
-    "HenrikBengtsson/revdepcheck.extras",
-    lib = user_lib,
-    ask = FALSE,
-    upgrade = FALSE,
-    dependencies = TRUE
-  )
-}}
+ensure_installed("jsonlite")
 
 pkg_name <- {package_literal}
 
-revdeps <- revdepcheck::cran_revdeps(pkg_name, dependencies = TRUE, bioc = FALSE)
-cranpkgs <- unname(available.packages(repos = cran_repo)[, "Package"])
-cranrevdeps <- revdeps[revdeps %in% cranpkgs]
+db <- available.packages(repos = source_repo, type = "source")
+revdeps <- tools::package_dependencies(
+  packages = pkg_name,
+  db = db,
+  which = c("Depends", "Imports", "LinkingTo", "Suggests"),
+  reverse = TRUE
+)[[pkg_name]]
+if (is.null(revdeps)) {{
+  revdeps <- character()
+}}
+revdeps <- sort(unique(stats::na.omit(revdeps)))
+if (length(revdeps) > 0) {{
+  base_pkgs <- unique(c(.BaseNamespaceEnv$basePackage, rownames(installed.packages(priority = "base"))))
+  revdeps <- setdiff(revdeps, base_pkgs)
+}}
 
-sysreqs <- if (length(cranrevdeps) == 0) {{
+sysreqs <- if (length(revdeps) == 0) {{
   list(install_scripts = character(), post_install = character())
 }} else {{
-  pak::pkg_sysreqs(cranrevdeps, sysreqs_platform = "ubuntu")
+  pak::pkg_sysreqs(revdeps, sysreqs_platform = "ubuntu")
 }}
 
 if (!is.list(sysreqs) || is.null(sysreqs$install_scripts) || is.null(sysreqs$post_install)) {{
@@ -306,13 +309,13 @@ mod tests {
     #[test]
     fn build_script_contains_expected_fragments() {
         let script = build_sysreqs_script("ggsci", 4).expect("script must render");
-        assert!(script.contains("revdepcheck::cran_revdeps"));
+        assert!(script.contains("tools::package_dependencies"));
         assert!(script.contains("pak::pkg_sysreqs"));
         assert!(script.contains("ensure_installed(\"pak\")"));
-        assert!(script.contains("HenrikBengtsson/revdepcheck.extras"));
         assert!(script.contains("available.packages"));
         assert!(script.contains("jsonlite::toJSON"));
         assert!(script.contains("Sys.setenv(NOT_CRAN = \"true\")"));
+        assert!(script.contains("setdiff(revdeps, base_pkgs)"));
     }
 
     #[test]
