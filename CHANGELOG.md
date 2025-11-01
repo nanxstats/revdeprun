@@ -10,6 +10,8 @@
   (P3M) into `revdep/library/` before running the parallel checks.
   This combination dramatically reduces the pre-install time while making
   the checks more deterministic and robust (#48, #51).
+  A special thanks to @yihui for his work on `xfun::rev_check()`
+  and the helpful discussions enabling this improvement.
 - Refactor workspace management to separate the cloned repo and temporary file
   directory (#52). This makes the directory structure canonical and predicable.
 
