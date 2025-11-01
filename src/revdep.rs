@@ -96,6 +96,7 @@ pub fn run_revcheck(
     num_workers: usize,
     progress: &Progress,
 ) -> Result<()> {
+    let max_connections = util::optimal_max_connections(num_workers);
     let codename = detect_ubuntu_codename().context("failed to detect Ubuntu release codename")?;
 
     let install_contents = build_revdep_install_script(repo_path, num_workers, &codename)?;
@@ -123,9 +124,13 @@ pub fn run_revcheck(
 
     let install_task = progress.task("Installing revdep dependencies");
     let install_result = progress.suspend(|| {
-        cmd!(shell, "Rscript --vanilla {install_path}")
-            .quiet()
-            .run()
+        let install_max_connections = max_connections.to_string();
+        cmd!(
+            shell,
+            "Rscript --vanilla --max-connections={install_max_connections} {install_path}"
+        )
+        .quiet()
+        .run()
     });
 
     match install_result {
@@ -140,10 +145,14 @@ pub fn run_revcheck(
 
     progress.println("Launching xfun::rev_check()...");
     progress.suspend(|| {
-        cmd!(shell, "Rscript --vanilla {run_path}")
-            .quiet()
-            .run()
-            .context("xfun::rev_check() reported an error")
+        let run_max_connections = max_connections.to_string();
+        cmd!(
+            shell,
+            "Rscript --vanilla --max-connections={run_max_connections} {run_path}"
+        )
+        .quiet()
+        .run()
+        .context("xfun::rev_check() reported an error")
     })?;
 
     Ok(())
