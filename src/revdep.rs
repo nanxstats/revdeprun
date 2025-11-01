@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow, bail};
-use tempfile::NamedTempFile;
+use tempfile::{NamedTempFile, tempdir_in};
 use xshell::{Shell, cmd};
 
 use crate::{
@@ -26,19 +26,20 @@ pub fn prepare_repository(
 ) -> Result<PathBuf> {
     let candidate = Path::new(spec);
     if candidate.exists() {
-        let task = progress.task(format!("Using local repository at {}", candidate.display()));
-        match workspace::canonicalized(candidate) {
-            Ok(path) => {
-                task.finish_with_message(format!("Using {}", path.display()));
-                return Ok(path);
-            }
-            Err(err) => {
-                task.fail(format!(
-                    "Failed to use local repository {}",
-                    candidate.display()
-                ));
-                return Err(err);
-            }
+        if candidate.is_dir() {
+            return prepare_local_directory(candidate, progress);
+        } else if candidate.is_file() && is_tarball(candidate) {
+            return prepare_tarball(shell, workspace, candidate, progress);
+        } else if candidate.is_file() {
+            bail!(
+                "unsupported local package input {}; expected a directory or .tar.gz archive",
+                candidate.display()
+            );
+        } else {
+            bail!(
+                "unsupported package input {}; expected a directory or .tar.gz archive",
+                candidate.display()
+            );
         }
     }
 
@@ -86,6 +87,154 @@ pub fn prepare_repository(
     }
 
     workspace::canonicalized(&destination)
+}
+
+fn prepare_local_directory(candidate: &Path, progress: &Progress) -> Result<PathBuf> {
+    let task = progress.task(format!("Using local repository at {}", candidate.display()));
+    match workspace::canonicalized(candidate) {
+        Ok(path) => {
+            task.finish_with_message(format!("Using {}", path.display()));
+            Ok(path)
+        }
+        Err(err) => {
+            task.fail(format!(
+                "Failed to use local repository {}",
+                candidate.display()
+            ));
+            Err(err)
+        }
+    }
+}
+
+fn prepare_tarball(
+    shell: &Shell,
+    workspace: &Workspace,
+    tarball: &Path,
+    progress: &Progress,
+) -> Result<PathBuf> {
+    let tarball_path = workspace::canonicalized(tarball)
+        .with_context(|| format!("failed to resolve tarball path {}", tarball.display()))?;
+
+    let task = progress.task(format!(
+        "Preparing package from tarball {}",
+        tarball_path.display()
+    ));
+
+    let extraction_dir = tempdir_in(workspace.temp_dir()).with_context(|| {
+        format!(
+            "failed to create extraction directory for {}",
+            tarball_path.display()
+        )
+    })?;
+    let extraction_path = extraction_dir.keep();
+
+    let extraction_output = progress.suspend(|| {
+        cmd!(shell, "tar -xzf {tarball_path} -C {extraction_path}")
+            .quiet()
+            .ignore_status()
+            .output()
+    });
+
+    let output = match extraction_output {
+        Ok(output) => output,
+        Err(err) => {
+            task.fail(format!("Failed to extract {}", tarball_path.display()));
+            return Err(err).context("failed to launch tar for package extraction");
+        }
+    };
+
+    if !output.status.success() {
+        task.fail(format!("Failed to extract {}", tarball_path.display()));
+        util::emit_command_output(
+            progress,
+            &format!(
+                "tar -xzf {} -C {}",
+                tarball_path.display(),
+                extraction_path.display()
+            ),
+            &output.stdout,
+            &output.stderr,
+        );
+        bail!(
+            "failed to extract package tarball {}",
+            tarball_path.display()
+        );
+    }
+
+    let package_dir = match locate_package_root(&extraction_path, &tarball_path) {
+        Ok(path) => path,
+        Err(err) => {
+            task.fail(format!("Invalid contents in {}", tarball_path.display()));
+            return Err(err);
+        }
+    };
+
+    let canonical_dir = match workspace::canonicalized(&package_dir) {
+        Ok(path) => path,
+        Err(err) => {
+            task.fail(format!(
+                "Failed to resolve extracted directory for {}",
+                tarball_path.display()
+            ));
+            return Err(err);
+        }
+    };
+
+    task.finish_with_message(format!("Using {}", canonical_dir.display()));
+    Ok(canonical_dir)
+}
+
+fn locate_package_root(extraction_root: &Path, tarball: &Path) -> Result<PathBuf> {
+    if extraction_root.join("DESCRIPTION").is_file() {
+        return Ok(extraction_root.to_path_buf());
+    }
+
+    let entries = fs::read_dir(extraction_root).with_context(|| {
+        format!(
+            "failed to inspect extracted contents of {}",
+            tarball.display()
+        )
+    })?;
+
+    let mut candidates = Vec::new();
+    for entry in entries {
+        let entry = entry.with_context(|| {
+            format!(
+                "failed to inspect extracted contents of {}",
+                tarball.display()
+            )
+        })?;
+        let path = entry.path();
+        if path.is_dir() && path.join("DESCRIPTION").is_file() {
+            candidates.push(path);
+        }
+    }
+
+    match candidates.len() {
+        1 => Ok(candidates.pop().unwrap()),
+        0 => bail!(
+            "package tarball {} did not contain a DESCRIPTION file",
+            tarball.display()
+        ),
+        _ => {
+            let list = candidates
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            bail!(
+                "package tarball {} contained multiple candidate package roots: {list}",
+                tarball.display()
+            )
+        }
+    }
+}
+
+fn is_tarball(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+        return false;
+    };
+    name.to_ascii_lowercase().ends_with(".tar.gz")
 }
 
 /// Runs reverse dependency checks for the repository under `repo_path`.
@@ -384,6 +533,10 @@ fn ubuntu_codename_from_os_release(contents: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::workspace;
+    use std::fs;
+    use tempfile::tempdir;
+    use xshell::Shell;
 
     #[test]
     fn build_install_script_uses_binary_repo() {
@@ -428,5 +581,62 @@ UBUNTU_CODENAME=noble
 "#;
         let codename = ubuntu_codename_from_os_release(contents);
         assert_eq!(codename.as_deref(), Some("noble"));
+    }
+
+    #[test]
+    fn detects_tarball_filenames() {
+        assert!(is_tarball(Path::new("pkg_0.1.0.tar.gz")));
+        assert!(is_tarball(Path::new("pkg.TAR.GZ")));
+        assert!(!is_tarball(Path::new("pkg.zip")));
+        assert!(!is_tarball(Path::new("pkg.tar")));
+        assert!(!is_tarball(Path::new("pkg.tgz")));
+    }
+
+    #[test]
+    fn prepares_repository_from_tarball() {
+        let shell = Shell::new().expect("shell");
+        let tmp = tempdir().expect("tempdir");
+
+        let package_name = "mypkg";
+        let package_root = tmp.path().join(package_name);
+        fs::create_dir_all(&package_root).expect("package directory");
+        fs::write(
+            package_root.join("DESCRIPTION"),
+            "Package: mypkg\nVersion: 0.1.0\n",
+        )
+        .expect("description");
+        fs::create_dir_all(package_root.join("R")).expect("R directory");
+        fs::write(
+            package_root.join("R").join("hello.R"),
+            "hello <- function() 1",
+        )
+        .expect("R script");
+
+        let tarball_path = tmp.path().join("mypkg_0.1.0.tar.gz");
+        {
+            let _dir = shell.push_dir(tmp.path());
+            cmd!(shell, "tar -czf {tarball_path} {package_name}")
+                .quiet()
+                .run()
+                .expect("create tarball");
+        }
+
+        let workspace_root = tmp.path().join("workspace");
+        let workspace = workspace::prepare(Some(workspace_root.clone())).expect("workspace");
+        let progress = Progress::new();
+
+        let repo_path = prepare_repository(
+            &shell,
+            &workspace,
+            tarball_path.to_str().expect("utf8 path"),
+            &progress,
+        )
+        .expect("prepared repository");
+
+        assert!(repo_path.join("DESCRIPTION").exists());
+        let canonical_root = workspace_root
+            .canonicalize()
+            .expect("canonical workspace root");
+        assert!(repo_path.starts_with(&canonical_root));
     }
 }
