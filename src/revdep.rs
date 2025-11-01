@@ -89,7 +89,7 @@ pub fn prepare_repository(
 }
 
 /// Runs reverse dependency checks for the repository under `repo_path`.
-pub fn run_revdepcheck(
+pub fn run_revcheck(
     shell: &Shell,
     workspace: &Workspace,
     repo_path: &Path,
@@ -149,8 +149,8 @@ pub fn run_revdepcheck(
     Ok(())
 }
 
-/// Returns the default results directory created by revdepcheck.
-pub fn results_dir(repo_path: &Path) -> PathBuf {
+/// Returns the default library directory created for xfun::rev_check().
+pub fn revlib_dir(repo_path: &Path) -> PathBuf {
     repo_path.join("revdep")
 }
 

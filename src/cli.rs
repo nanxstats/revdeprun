@@ -13,7 +13,7 @@ pub struct Args {
     #[arg(long = "r-version", default_value = "release")]
     pub r_version: String,
 
-    /// Number of parallel workers to pass to revdepcheck.
+    /// Number of parallel workers to run xfun::rev_check().
     #[arg(long, value_name = "N")]
     pub num_workers: Option<NonZeroUsize>,
 
