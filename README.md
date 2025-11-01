@@ -65,7 +65,7 @@ Simply point `revdeprun` at your package repository:
 revdeprun https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
 ```
 
-Sensible defaults that makes this fast and robust:
+Sensible defaults that make this fast and robust:
 
 - Discover and install the current release version of R for Ubuntu.
 - Pre-install system requirements for all reverse dependencies all at once.
