@@ -7,7 +7,7 @@ dependency checks for R packages.
 
 - `src/lib.rs` exposes `run()`, which wires together argument parsing, workspace
   creation, R toolchain resolution and installation, repository preparation, and
-  the final `revdepcheck` invocation.
+  the final `xfun::rev_check()` invocation.
 - `src/cli.rs` uses `clap` for argument parsing. Keep the CLI surface lean; new
   flags require corresponding documentation updates.
 - `src/r_version.rs` talks to `https://api.r-hub.io/rversions/resolve`. Changes
@@ -15,13 +15,15 @@ dependency checks for R packages.
   `oldrel-1`). Prefer blocking `reqwest` to avoid pulling tokio into the call
 - `src/r_install.rs` downloads the `.deb`, installs prerequisites, and creates
   `/usr/local/bin` symlinks with `xshell`. Assume Ubuntu-only environments.
-- `src/revdep.rs` clones repositories, writes a bootstrap R script, and runs
-  `revdepcheck::revdep_check`. Keep the script deterministic and avoid editing
-  user repositories outside `revdep/`. The revdep flow uses two scripts:
-  one quiet bootstrap script for installing dependencies and a second script
-  that runs `revdepcheck`, so only the interactive phase reaches stdout.
-- `src/workspace.rs` manages per-run directories. Respect user-provided
-  workspaces without deleting their content.
+- `src/revdep.rs` clones repositories, writes an install bootstrap R script,
+  and invokes `xfun::rev_check()` after preinstalling binaries from Posit
+  Package Manager. Keep both scripts deterministic and avoid editing user
+  repositories outside `revdep/`. Only the interactive `xfun::rev_check()`
+  phase should reach stdout.
+- `src/workspace.rs` manages workspace directories. Remote clones default to
+  `<repo>` alongside the current working directory, while temporary files live
+  under `revdeprun-work/`. Respect user-provided workspaces without deleting
+  their content.
 - `src/util.rs` holds shared helpers; keep it small and well-tested.
 
 ## Operational expectations
