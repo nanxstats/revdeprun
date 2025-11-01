@@ -48,10 +48,10 @@ restart your shell.
 
 Currently, this tool is designed for Ubuntu-based systems and requires:
 
-- Operating system: Ubuntu 22.04 or newer
-- Version control: Git on `PATH`
-- Network access: To download R, R packages, and repository metadata
-- Elevated privileges: `sudo` access for installing R and system requirements
+- Operating system: Ubuntu 22.04 or newer.
+- Version control: Git on `PATH`.
+- Network access: To download R, R packages, and repository metadata.
+- Elevated privileges: `sudo` access for installing R and system requirements.
 
 Security note: Reverse dependency checks execute arbitrary third-party code.
 Run `revdeprun` in temporary, isolated environments such as disposable cloud
@@ -68,7 +68,7 @@ revdeprun https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
 Sensible defaults that make this fast and robust:
 
 - Discover and install the current release version of R for Ubuntu.
-- Pre-install system requirements for all reverse dependencies all at once.
+- Pre-install system requirements for all reverse dependencies at once.
 - Pre-install all dependencies required for checking reverse dependencies
   from the Posit Public Package Manager (P3M) binary repository,
   into a dedicated library in `revdep/library/`.
@@ -115,7 +115,7 @@ Standard check on a remote repository:
 revdeprun https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
 ```
 
-Specify [R version](https://github.com/r-lib/actions/tree/v2-branch/setup-r)
+Specify [R version](https://github.com/r-lib/actions/tree/v2-branch/setup-r#inputs)
 and parallelism:
 
 ```bash
