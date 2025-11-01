@@ -13,7 +13,7 @@
   A special thanks to @yihui for his work on `xfun::rev_check()`
   and the helpful discussions enabling this improvement.
 - Refactor workspace management to separate the cloned repo and temporary file
-  directory (#52). This makes the directory structure canonical and predicable.
+  directory (#52). This makes the directory structure canonical and predictable.
 
 ## revdeprun 0.6.0
 
