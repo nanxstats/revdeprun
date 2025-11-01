@@ -6,8 +6,8 @@
 
 - Replace the {revdepcheck.extras} workflow with a fast binary pre-installation
   phase followed by `xfun::rev_check()`. The new approach installs the binary
-  packages required for checking reverse dependencies from Posit Package Manager
-  (P3M) into `revdep/library/` before running the parallel checks.
+  packages required for checking reverse dependencies from Posit Public Package
+  Manager (P3M) into `revdep/library/` before running the parallel checks.
   This combination dramatically reduces the pre-install time while making
   the checks more deterministic and robust (#48, #51).
   A special thanks to @yihui for his work on `xfun::rev_check()`
