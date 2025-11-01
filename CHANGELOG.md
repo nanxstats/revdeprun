@@ -1,16 +1,19 @@
 # Changelog
 
-## [Unreleased]
+## revdeprun 1.0.0
 
 ### Significant changes
 
-- Replace the {revdepcheck.extras} workflow with a binary pre-installation
-  phase followed by `xfun::rev_check()`, which installs reverse dependency
-  (and their dependencies) from Posit Package Manager (P3M) into
-  `revdep/library` before running the checks. This dramatically shortens
-  the pre-install phase while keeping checks deterministic.
-- Clone remote repositories alongside the current working directory (just like
-  `git clone`) instead of nested timestamped workspace paths for easier access.
+- Replace the {revdepcheck.extras} workflow with a fast binary pre-installation
+  phase followed by `xfun::rev_check()`. The new approach installs the binary
+  packages required for checking reverse dependencies from Posit Package Manager
+  (P3M) into `revdep/library/` before running the parallel checks.
+  This combination dramatically reduces the pre-install time while making
+  the checks more deterministic and robust (#48, #51).
+  A special thanks to @yihui for his work on `xfun::rev_check()`
+  and the helpful discussions enabling this improvement.
+- Refactor workspace management to separate the cloned repo and temporary file
+  directory (#52). This makes the directory structure canonical and predictable.
 
 ## revdeprun 0.6.0
 

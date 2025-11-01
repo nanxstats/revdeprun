@@ -78,12 +78,12 @@ mod tests {
     #[test]
     fn infers_repository_name() {
         assert_eq!(
-            guess_repo_name("https://github.com/r-lib/revdepcheck.git"),
-            Some("revdepcheck".to_string())
+            guess_repo_name("https://github.com/nanxstats/ggsci.git"),
+            Some("ggsci".to_string())
         );
         assert_eq!(
-            guess_repo_name("git@github.com:r-lib/revdepcheck.git"),
-            Some("revdepcheck".to_string())
+            guess_repo_name("git@github.com:nanxstats/ggsci.git"),
+            Some("ggsci".to_string())
         );
         assert_eq!(guess_repo_name(""), None);
     }

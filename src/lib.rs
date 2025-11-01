@@ -96,14 +96,14 @@ pub fn run() -> Result<()> {
     )
     .context("failed to install system requirements for reverse dependencies")?;
 
-    revdep::run_revdepcheck(&shell, &workspace, &repository_path, num_workers, &progress)
+    revdep::run_revcheck(&shell, &workspace, &repository_path, num_workers, &progress)
         .context("reverse dependency check invocation failed")?;
 
     progress.println(format!(
-        "Reverse dependency check finished successfully.\n  • R version: {}\n  • repository: {}\n  • results: {}",
+        "Reverse dependency check finished successfully.\n  • R version: {}\n  • repository: {}\n  • library: {}",
         resolved_version.version,
         repository_path.display(),
-        revdep::results_dir(&repository_path).display()
+        revdep::revlib_dir(&repository_path).display()
     ));
 
     Ok(())
