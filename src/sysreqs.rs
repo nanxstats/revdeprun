@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer};
 use tempfile::NamedTempFile;
 use xshell::{Shell, cmd};
 
-use crate::{progress::Progress, util};
+use crate::{progress::Progress, util, workspace::Workspace};
 
 #[derive(Debug, Deserialize)]
 struct SysreqsPayload {
@@ -43,15 +43,15 @@ where
 /// Resolves and installs system requirements for reverse dependencies.
 pub fn install_reverse_dep_sysreqs(
     shell: &Shell,
-    workspace: &Path,
+    workspace: &Workspace,
     repo_path: &Path,
     num_workers: usize,
     progress: &Progress,
 ) -> Result<()> {
     let package_name = read_package_name(repo_path)?;
     let script_contents = build_sysreqs_script(&package_name, num_workers)?;
-    let mut script =
-        NamedTempFile::new_in(workspace).context("failed to create temporary sysreqs R script")?;
+    let mut script = NamedTempFile::new_in(workspace.temp_dir())
+        .context("failed to create temporary sysreqs R script")?;
     script
         .write_all(script_contents.as_bytes())
         .context("failed to write sysreqs R script")?;

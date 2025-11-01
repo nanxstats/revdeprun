@@ -2,7 +2,7 @@
 //!
 //! The library exposes a single [`run`] function that orchestrates the end-to-end
 //! workflow for provisioning R, preparing the target package repository, and
-//! executing `revdepcheck`.
+//! executing `xfun::rev_check()`.
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
@@ -23,7 +23,7 @@ mod workspace;
 /// # Errors
 ///
 /// Returns an error whenever preparing the workspace, installing R, cloning the
-/// repository, or launching `revdepcheck` fails.
+/// repository, or launching `xfun::rev_check()` fails.
 pub fn run() -> Result<()> {
     let args = cli::Args::parse();
 
@@ -39,12 +39,15 @@ pub fn run() -> Result<()> {
         .as_ref()
         .map(|path| format!("Preparing workspace {}", path.display()))
         .unwrap_or_else(|| "Preparing workspace directory".to_string());
-    let workspace_path = {
+    let workspace = {
         let task = progress.task(workspace_label.clone());
         match workspace::prepare(args.work_dir.clone()).context("failed to prepare workspace") {
-            Ok(path) => {
-                task.finish_with_message(format!("Workspace ready at {}", path.display()));
-                path
+            Ok(workspace) => {
+                task.finish_with_message(format!(
+                    "Workspace ready (clone root: {})",
+                    workspace.clone_root().display()
+                ));
+                workspace
             }
             Err(err) => {
                 task.fail(format!("{workspace_label} (failed)"));
@@ -76,7 +79,7 @@ pub fn run() -> Result<()> {
     }
 
     let repository_path =
-        revdep::prepare_repository(&shell, &workspace_path, &args.repository, &progress)
+        revdep::prepare_repository(&shell, &workspace, &args.repository, &progress)
             .context("failed to prepare target repository")?;
 
     let num_workers = args
@@ -86,24 +89,18 @@ pub fn run() -> Result<()> {
 
     sysreqs::install_reverse_dep_sysreqs(
         &shell,
-        &workspace_path,
+        &workspace,
         &repository_path,
         num_workers,
         &progress,
     )
     .context("failed to install system requirements for reverse dependencies")?;
 
-    revdep::run_revdepcheck(
-        &shell,
-        &workspace_path,
-        &repository_path,
-        num_workers,
-        &progress,
-    )
-    .context("revdepcheck invocation failed")?;
+    revdep::run_revdepcheck(&shell, &workspace, &repository_path, num_workers, &progress)
+        .context("reverse dependency check invocation failed")?;
 
     progress.println(format!(
-        "revdepcheck finished successfully.\n  • R version: {}\n  • repository: {}\n  • results: {}",
+        "Reverse dependency check finished successfully.\n  • R version: {}\n  • repository: {}\n  • results: {}",
         resolved_version.version,
         repository_path.display(),
         revdep::results_dir(&repository_path).display()

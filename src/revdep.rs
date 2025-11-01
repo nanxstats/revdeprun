@@ -8,14 +8,19 @@ use anyhow::{Context, Result, anyhow, bail};
 use tempfile::NamedTempFile;
 use xshell::{Shell, cmd};
 
-use crate::{progress::Progress, util, workspace};
+use crate::{
+    progress::Progress,
+    util,
+    workspace::{self, Workspace},
+};
 
-/// Ensures a checkout of the target repository exists within `workspace`.
+/// Ensures a checkout of the target repository exists within the configured
+/// workspace clone root.
 ///
 /// Local paths are used as-is, while remote Git URLs are cloned.
 pub fn prepare_repository(
     shell: &Shell,
-    workspace: &Path,
+    workspace: &Workspace,
     spec: &str,
     progress: &Progress,
 ) -> Result<PathBuf> {
@@ -37,16 +42,16 @@ pub fn prepare_repository(
         }
     }
 
-    fs::create_dir_all(workspace).with_context(|| {
+    fs::create_dir_all(workspace.clone_root()).with_context(|| {
         format!(
-            "failed to create workspace directory {}",
-            workspace.display()
+            "failed to create clone root directory {}",
+            workspace.clone_root().display()
         )
     })?;
 
     let repo_name = util::guess_repo_name(spec)
         .ok_or_else(|| anyhow!("unable to infer repository name from {spec}"))?;
-    let destination = workspace.join(repo_name);
+    let destination = workspace.clone_root().join(repo_name);
     if destination.exists() {
         anyhow::bail!(
             "refusing to clone into {} because the directory already exists",
@@ -86,7 +91,7 @@ pub fn prepare_repository(
 /// Runs reverse dependency checks for the repository under `repo_path`.
 pub fn run_revdepcheck(
     shell: &Shell,
-    workspace: &Path,
+    workspace: &Workspace,
     repo_path: &Path,
     num_workers: usize,
     progress: &Progress,
@@ -96,10 +101,10 @@ pub fn run_revdepcheck(
     let install_contents = build_revdep_install_script(repo_path, num_workers, &codename)?;
     let run_contents = build_revdep_run_script(repo_path, num_workers)?;
 
-    let mut install_script =
-        NamedTempFile::new_in(workspace).context("failed to create temporary R script file")?;
-    let mut run_script =
-        NamedTempFile::new_in(workspace).context("failed to create temporary R script file")?;
+    let mut install_script = NamedTempFile::new_in(workspace.temp_dir())
+        .context("failed to create temporary R script file")?;
+    let mut run_script = NamedTempFile::new_in(workspace.temp_dir())
+        .context("failed to create temporary R script file")?;
 
     install_script
         .write_all(install_contents.as_bytes())

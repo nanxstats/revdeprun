@@ -4,7 +4,7 @@ use clap::Parser;
 
 /// Command-line arguments for the `revdeprun` CLI.
 #[derive(Debug, Parser)]
-#[command(author, version, about = "Provision R and run revdepcheck end-to-end", long_about = None)]
+#[command(author, version, about = "Provision R and run reverse dependency check end-to-end", long_about = None)]
 pub struct Args {
     /// Git URL or filesystem path pointing to the target R package repository.
     pub repository: String,
