@@ -9,6 +9,8 @@
   (and their dependencies) from Posit Package Manager (P3M) into
   `revdep/library` before running the checks. This dramatically shortens
   the pre-install phase while keeping checks deterministic.
+- Clone remote repositories alongside the current working directory (just like
+  `git clone`) instead of nested timestamped workspace paths for easier access.
 
 ## revdeprun 0.6.0
 
