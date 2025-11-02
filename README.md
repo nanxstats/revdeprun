@@ -48,7 +48,7 @@ restart your shell.
 
 Currently, this tool is designed for Ubuntu-based systems and requires:
 
-- Operating system: Ubuntu 22.04 or newer.
+- Operating system: Ubuntu 22.04 LTS, 24.04 LTS, and future LTS releases.
 - Version control: Git on `PATH`.
 - Network access: To download R, R packages, and repository metadata.
 - Elevated privileges: `sudo` access for installing R and system requirements.
