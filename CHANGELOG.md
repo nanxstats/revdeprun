@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Maintenance
+
+- Remove the logic for installing `libcurl4-openssl-dev` and `libssl-dev`
+  as part of the R prerequisites now that the workflow no longer depends on
+  {revdepcheck}.
+
 ## revdeprun 1.1.0
 
 ### New features

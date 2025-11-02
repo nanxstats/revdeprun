@@ -87,16 +87,6 @@ fn install_prerequisites(shell: &Shell, progress: &Progress) -> Result<()> {
         ),
     )?;
 
-    run_command(
-        progress,
-        "Installing revdep dependencies",
-        "revdep dependencies installed",
-        cmd!(
-            shell,
-            "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y libcurl4-openssl-dev libssl-dev"
-        ),
-    )?;
-
     Ok(())
 }
 
