@@ -383,9 +383,14 @@ fn link_tinytex_binaries(shell: &Shell, progress: &Progress) -> Result<()> {
         .ignore_status()
         .read()
     {
-        let path = Path::new(path_output.trim());
-        if let Some(parent) = path.parent() {
-            bin_dirs.push(parent.to_path_buf());
+        let path_output = path_output.trim();
+        if !path_output.is_empty() && path_output.contains('/') {
+            let path = Path::new(path_output);
+            if path.is_file() {
+                if let Some(parent) = path.parent() {
+                    bin_dirs.push(parent.to_path_buf());
+                }
+            }
         }
     }
 
