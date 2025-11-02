@@ -1,5 +1,17 @@
 # Changelog
 
+## revdeprun 1.1.3
+
+### Improvements
+
+- Reuse the shared progress logging helper so the installer path no longer
+  carries its own copy of `emit_stream` (#74).
+
+### Documentation
+
+- Clarify supported Ubuntu versions are limited to LTS releases in `README.md` (#72).
+- Fix spelling in comments and error messages (#73).
+
 ## revdeprun 1.1.2
 
 ### Improvements
