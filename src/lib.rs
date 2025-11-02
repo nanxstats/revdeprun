@@ -85,7 +85,11 @@ pub fn run() -> Result<()> {
     let num_workers = args
         .num_workers
         .map(|value| value.get())
-        .unwrap_or_else(num_cpus::get);
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|cpus| cpus.get())
+                .unwrap_or(1)
+        });
 
     sysreqs::install_reverse_dep_sysreqs(
         &shell,
