@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### New features
+
+- Accept local source package tarballs (`.tar.gz`) as inputs for reverse
+  dependency checks.
+
 ### Improvements
 
 - Launch `Rscript` with an auto-tuned `--max-connections` value based

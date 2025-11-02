@@ -6,10 +6,10 @@ use clap::Parser;
 #[derive(Debug, Parser)]
 #[command(author, version, about = "Provision R and run reverse dependency check end-to-end", long_about = None)]
 pub struct Args {
-    /// Git URL or filesystem path pointing to the target R package repository.
+    /// Git URL, local directory, or source package tarball (.tar.gz) for the target R package.
     pub repository: String,
 
-    /// R version specification to install (e.g. release, 4.3.3, oldrel-1).
+    /// R version to install (e.g., release, 4.3.3, oldrel-1).
     #[arg(long = "r-version", default_value = "release")]
     pub r_version: String,
 

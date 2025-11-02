@@ -59,11 +59,13 @@ instances or containers.
 
 ## Usage
 
-Simply point `revdeprun` at your package repository:
+Simply point `revdeprun` at your package:
 
 ```bash
 revdeprun https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
 ```
+
+Git repository, local directory, or source tarball (`.tar.gz`) are supported.
 
 Sensible defaults that make this fast and robust:
 
@@ -83,11 +85,11 @@ Usage: revdeprun [OPTIONS] <REPOSITORY>
 
 Arguments:
   <REPOSITORY>
-          Git URL or filesystem path to the target R package repository
+          Git URL, local directory, or source package tarball (.tar.gz) for the target R package
 
 Options:
       --r-version <R_VERSION>
-          R version to install: release, oldrel-1, or exact version (e.g., 4.3.3)
+          R version to install (e.g., release, 4.3.3, oldrel-1)
           [default: release]
 
       --num-workers <N>
@@ -95,16 +97,16 @@ Options:
           [default: number of CPU cores]
 
       --work-dir <WORK_DIR>
-          Workspace directory for temporary files and cloned repositories
+          Optional workspace directory where temporary files are created
 
       --skip-r-install
-          Skip R installation and use the existing system-wide R
+          Skip installing R and reuse the system-wide installation
 
   -h, --help
-          Print help information
+          Print help
 
   -V, --version
-          Print version information
+          Print version
 ```
 
 ## Example workflows
@@ -134,6 +136,12 @@ Check a local directory:
 
 ```bash
 revdeprun ~/workspace/YOUR-REPOSITORY
+```
+
+Check a local source package tarball:
+
+```bash
+revdeprun ~/packages/YOURPACKAGE_1.2.3.tar.gz
 ```
 
 Use an existing R installation:
