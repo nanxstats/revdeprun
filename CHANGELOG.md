@@ -1,17 +1,17 @@
 # Changelog
 
-## Unreleased
+## revdeprun 1.1.0
 
 ### New features
 
 - Accept local source package tarballs (`.tar.gz`) as inputs for reverse
-  dependency checks.
+  dependency checks (#61).
 
 ### Improvements
 
 - Launch `Rscript` with an auto-tuned `--max-connections` value based
   on the CPU core count to avoid potential connection limits during parallel
-  reverse dependency checks on high-CPU instances.
+  reverse dependency checks on high-CPU instances (#60).
 
 ## revdeprun 1.0.0
 
