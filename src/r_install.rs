@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     env,
     fs::File,
     io::copy,
@@ -364,10 +365,13 @@ fn tinytex_is_installed(shell: &Shell) -> bool {
     }
 
     if let Ok(output) = cmd!(shell, "quarto list tools").ignore_status().read() {
-        for line in output.lines() {
+        let sanitized = strip_ansi_codes(&output);
+        for line in sanitized.lines() {
             let trimmed = line.trim_start();
-            if trimmed.starts_with("tinytex") {
-                return !trimmed.contains("Not installed");
+            if let Some(first) = trimmed.split_whitespace().next() {
+                if first == "tinytex" {
+                    return !trimmed.contains("Not installed");
+                }
             }
         }
     }
@@ -427,6 +431,75 @@ fn link_tinytex_binaries(shell: &Shell, progress: &Progress) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
+    if !input.contains('\x1b') {
+        return Cow::Borrowed(input);
+    }
+
+    let mut sanitized = String::with_capacity(input.len());
+    let mut index = 0;
+
+    while index < input.len() {
+        let ch = input[index..].chars().next().unwrap();
+        if ch != '\x1b' {
+            sanitized.push(ch);
+            index += ch.len_utf8();
+            continue;
+        }
+
+        index += ch.len_utf8();
+        if index >= input.len() {
+            break;
+        }
+
+        let next = input[index..].chars().next().unwrap();
+
+        if next == '[' {
+            index += next.len_utf8();
+            while index < input.len() {
+                let seq_char = input[index..].chars().next().unwrap();
+                index += seq_char.len_utf8();
+                if (seq_char as u32) >= 0x40 && (seq_char as u32) <= 0x7E {
+                    break;
+                }
+            }
+            continue;
+        }
+
+        if next == ']' {
+            index += next.len_utf8();
+            while index < input.len() {
+                let seq_char = input[index..].chars().next().unwrap();
+                index += seq_char.len_utf8();
+                if seq_char == '\u{0007}' {
+                    break;
+                }
+                if seq_char == '\x1b' {
+                    if index < input.len() {
+                        let maybe_backslash = input[index..].chars().next().unwrap();
+                        index += maybe_backslash.len_utf8();
+                        if maybe_backslash == '\\' {
+                            break;
+                        }
+                    }
+                }
+            }
+            continue;
+        }
+
+        index += next.len_utf8();
+        while index < input.len() {
+            let seq_char = input[index..].chars().next().unwrap();
+            index += seq_char.len_utf8();
+            if (seq_char as u32) >= 0x40 && (seq_char as u32) <= 0x7E {
+                break;
+            }
+        }
+    }
+
+    Cow::Owned(sanitized)
 }
 
 fn ensure_curl(shell: &Shell, progress: &Progress) -> Result<()> {
