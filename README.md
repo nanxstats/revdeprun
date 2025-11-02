@@ -53,9 +53,17 @@ Currently, this tool is designed for Ubuntu-based systems and requires:
 - Network access: To download R, R packages, and repository metadata.
 - Elevated privileges: `sudo` access for installing R and system requirements.
 
-Security note: Reverse dependency checks execute arbitrary third-party code.
-Run `revdeprun` in temporary, isolated environments such as disposable cloud
-instances or containers.
+## Security
+
+> [!IMPORTANT]
+> Never run `revdeprun` on your local machine or any environment with sensitive data.
+> Reverse dependency checks execute arbitrary third-party R code, download
+> dependencies from external repositories, and install system packages via sudo.
+> Always run `revdeprun` in temporary, isolated environments such as disposable
+> cloud instances or containers that will be destroyed after use.
+>
+> See [SECURITY.md](https://github.com/nanxstats/revdeprun/blob/main/SECURITY.md)
+> for complete security guidelines.
 
 ## Usage
 
