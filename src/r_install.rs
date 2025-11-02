@@ -1,4 +1,5 @@
 use std::{
+    env,
     fs::File,
     io::copy,
     path::{Path, PathBuf},
@@ -325,12 +326,7 @@ fn ensure_pandoc(shell: &Shell, progress: &Progress) -> Result<()> {
 
 fn ensure_tinytex(shell: &Shell, progress: &Progress) -> Result<()> {
     let check_task = progress.task("Checking existing TinyTeX");
-    let already_installed = cmd!(shell, "tlmgr --version")
-        .quiet()
-        .ignore_status()
-        .run()
-        .is_ok();
-    if already_installed {
+    if tinytex_is_installed(shell) {
         check_task.finish_with_message("Using existing TinyTeX");
         return Ok(());
     }
@@ -340,30 +336,90 @@ fn ensure_tinytex(shell: &Shell, progress: &Progress) -> Result<()> {
         progress,
         "Installing TinyTeX via Quarto",
         "TinyTeX installed via Quarto",
-        cmd!(shell, "quarto install tinytex --update-path"),
+        cmd!(
+            shell,
+            "quarto install tinytex --no-prompt --log-level warning"
+        ),
     )?;
 
-    if let Ok(path_output) = cmd!(shell, "quarto tools path tinytex")
+    if !tinytex_is_installed(shell) {
+        bail!("TinyTeX installation via Quarto did not succeed");
+    }
+
+    link_tinytex_binaries(shell, progress)?;
+
+    progress.println("TinyTeX installation completed");
+
+    Ok(())
+}
+
+fn tinytex_is_installed(shell: &Shell) -> bool {
+    let cli_available = cmd!(shell, "tlmgr --version")
+        .quiet()
+        .ignore_status()
+        .run()
+        .is_ok();
+    if cli_available {
+        return true;
+    }
+
+    if let Ok(output) = cmd!(shell, "quarto list tools").ignore_status().read() {
+        for line in output.lines() {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with("tinytex") {
+                return !trimmed.contains("Not installed");
+            }
+        }
+    }
+
+    false
+}
+
+fn link_tinytex_binaries(shell: &Shell, progress: &Progress) -> Result<()> {
+    let mut bin_dirs = Vec::new();
+
+    if let Ok(path_output) = cmd!(shell, "command -v tlmgr")
+        .quiet()
         .ignore_status()
         .read()
     {
-        let tinytex_bin = path_output.trim();
-        if !tinytex_bin.is_empty() {
-            for binary in ["tlmgr", "pdflatex", "xelatex", "lualatex"] {
-                let source = format!("{tinytex_bin}/{binary}");
-                if Path::new(&source).exists() {
-                    run_command(
-                        progress,
-                        format!("Linking TinyTeX {binary}"),
-                        format!("Linked /usr/local/bin/{binary}"),
-                        cmd!(shell, "sudo ln -sf {source} /usr/local/bin/{binary}"),
-                    )?;
+        let path = Path::new(path_output.trim());
+        if let Some(parent) = path.parent() {
+            bin_dirs.push(parent.to_path_buf());
+        }
+    }
+
+    if let Some(home_dir) = env::var_os("HOME").map(PathBuf::from) {
+        let bin_root = home_dir.join(".TinyTeX").join("bin");
+        if let Ok(entries) = std::fs::read_dir(&bin_root) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() && !bin_dirs.iter().any(|existing| existing == &path) {
+                    bin_dirs.push(path);
                 }
             }
         }
     }
 
-    progress.println("TinyTeX installation completed");
+    if bin_dirs.is_empty() {
+        progress.println("TinyTeX binaries not located; skipping symlink creation");
+        return Ok(());
+    }
+
+    for binary in ["tlmgr", "pdflatex", "xelatex", "lualatex"] {
+        if let Some(source) = bin_dirs
+            .iter()
+            .map(|dir| dir.join(binary))
+            .find(|candidate| candidate.exists())
+        {
+            run_command(
+                progress,
+                format!("Linking TinyTeX {binary}"),
+                format!("Linked /usr/local/bin/{binary}"),
+                cmd!(shell, "sudo ln -sf {source} /usr/local/bin/{binary}"),
+            )?;
+        }
+    }
 
     Ok(())
 }
