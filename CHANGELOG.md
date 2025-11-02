@@ -1,5 +1,18 @@
 # Changelog
 
+## revdeprun 1.2.0
+
+### Bug fixes
+
+- Respect the provided number of workers detected by Rust or provided by user
+  in `revdep.rs` instead of taking the max with `parallel::detectCores()`,
+  to be consistent with `sysreqs.rs` (#77).
+
+### Improvements
+
+- Replace `num_cpus` with `std::thread::available_parallelism()` to reduce
+  the number of dependencies (#77).
+
 ## revdeprun 1.1.3
 
 ### Improvements
