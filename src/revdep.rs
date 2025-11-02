@@ -524,7 +524,7 @@ dir.create(library_dir, recursive = TRUE, showWarnings = FALSE)
 Sys.setenv(R_LIBS_USER = library_dir)
 .libPaths(c(library_dir, .libPaths()))
 
-install_workers <- max({workers}, parallel::detectCores())
+install_workers <- {workers}
 options(Ncpus = install_workers)
 "#
     )
