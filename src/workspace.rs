@@ -65,7 +65,7 @@ fn prepare_default_workspace() -> Result<Workspace> {
 /// This helper is used by modules that need to communicate user-facing paths.
 pub fn canonicalized(path: &Path) -> Result<PathBuf> {
     path.canonicalize()
-        .with_context(|| format!("failed to canonicalise {}", path.display()))
+        .with_context(|| format!("failed to canonicalize {}", path.display()))
 }
 
 #[cfg(test)]
