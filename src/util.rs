@@ -60,7 +60,7 @@ pub fn emit_command_output(progress: &Progress, label: &str, stdout: &[u8], stde
 pub fn optimal_max_connections(num_cpus: usize) -> usize {
     let cpus = num_cpus.max(1) as u64;
     let base = (3 * cpus + 64).max(128);
-    let rounded = ((base + 127) / 128) * 128;
+    let rounded = base.div_ceil(128) * 128;
     rounded.min(4096) as usize
 }
 
