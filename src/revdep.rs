@@ -492,6 +492,53 @@ ensure_installed("xfun")
 ensure_installed("markdown")
 ensure_installed("rmarkdown")
 
+# Remove this once https://github.com/yihui/xfun/pull/109 is merged and released
+revdeprun_compare_check <- function(status_only = TRUE, output = '00check_diffs.md') {{
+  if (length(dirs <- list.files('.', '.+[.]Rcheck$')) == 0) {{
+    # clean up the `recheck` file
+    if (xfun::file_exists('recheck')) writeLines(character(), 'recheck')
+    return()
+  }}
+  d2 <- function(d) c(d, paste0(d, '2'))
+  logs <- function(d) file.path(d2(d), '00check.log')
+  res <- NULL
+  if (!status_only && Sys.which('diff') == '')
+    warning("The command 'diff' is not available; will not calculate exact diffs in logs.")
+  for (d in dirs) {{
+    f <- xfun::existing_files(logs(d))
+    if (status_only && length(f) == 2) {{
+      status_line <- function(file) {{
+        x <- tail(xfun::read_utf8(file), 1)
+        if (grepl('^Status: ', x)) x else {{
+          warning('The last line of ', file, ' is not the status.')
+          NULL
+        }}
+      }}
+      # if the check with current CRAN version of package also failed, or the
+      # two statuses are the same, chances are we are good to go
+      s1 <- status_line(f[1])
+      if (length(grep('Status: .*\\d+ ERROR', s1)) || identical(s1, status_line(f[2]))) {{
+        unlink(d2(d), recursive = TRUE); next
+      }}
+    }}
+    res <- c(
+      res, paste('##', p <- xfun::sans_ext(d)), '',
+      sprintf('[CRAN version](https://cran.rstudio.com/package=%s) (-) vs current version (+):\n', p),
+      '```diff', xfun:::file_diff(f), '```', ''
+    )
+    if (length(res2 <- xfun:::cran_check_page(p, NULL))) res <- c(
+      res, 'CRAN check logs:\n\n```', xfun:::head_tail(unique(unlist(strsplit(res2, '\n')))), '```\n'
+    )
+  }}
+  if (length(res) == 0) return()
+  res <- c('---', 'title: xfun::rev_check() results', '---', '', res)
+  xfun::write_utf8(res, output)
+  if (!xfun::loadable('litedown')) return(output)
+  html_file <- litedown::mark(output, text = res)
+  if (!getOption('xfun.rev_check.keep_md', FALSE)) unlink(output)
+  html_file
+}}
+
 options(
   browser = "false",
   install.packages.compile.from.source = "always",
@@ -509,6 +556,8 @@ if (!nzchar(package_name)) {{
 }}
 
 results <- xfun::rev_check(package_name, src = ".")
+# Remove this once https://github.com/yihui/xfun/pull/109 is merged and released
+revdeprun_compare_check()
 invisible(results)
 "#
     );
@@ -624,6 +673,7 @@ mod tests {
         assert!(script.contains("mc.cores = install_workers"));
         assert!(script.contains("ensure_installed(\"markdown\")"));
         assert!(script.contains("ensure_installed(\"rmarkdown\")"));
+        assert!(script.contains("revdeprun_compare_check <- function"));
         assert!(script.contains("options("));
         assert!(script.contains("browser = \"false\""));
         assert!(script.contains("install.packages.compile.from.source = \"always\""));
