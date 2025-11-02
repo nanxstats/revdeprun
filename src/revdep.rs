@@ -126,7 +126,7 @@ fn prepare_tarball(
             tarball_path.display()
         )
     })?;
-    let extraction_path = extraction_dir.keep();
+    let extraction_path = extraction_dir.path().to_path_buf();
 
     let extraction_output = progress.suspend(|| {
         cmd!(shell, "tar -xzf {tarball_path} -C {extraction_path}")
@@ -169,7 +169,45 @@ fn prepare_tarball(
         }
     };
 
-    let canonical_dir = match workspace::canonicalized(&package_dir) {
+    let package_name = package_dir
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_string())
+        .or_else(|| infer_package_name(&tarball_path));
+    let package_name = match package_name {
+        Some(name) => name,
+        None => {
+            task.fail(format!(
+                "Failed to determine package name for {}",
+                tarball_path.display()
+            ));
+            bail!(
+                "failed to infer package name from tarball {}",
+                tarball_path.display()
+            );
+        }
+    };
+
+    let destination = workspace.temp_dir().join(&package_name);
+    if destination.exists() {
+        task.fail(format!(
+            "Destination {} already exists",
+            destination.display()
+        ));
+        bail!(
+            "refusing to overwrite existing directory {}; remove it or choose a different workspace",
+            destination.display()
+        );
+    }
+
+    fs::rename(&package_dir, &destination).with_context(|| {
+        format!(
+            "failed to move extracted package into {}",
+            destination.display()
+        )
+    })?;
+
+    let canonical_dir = match workspace::canonicalized(&destination) {
         Ok(path) => path,
         Err(err) => {
             task.fail(format!(
@@ -235,6 +273,17 @@ fn is_tarball(path: &Path) -> bool {
         return false;
     };
     name.to_ascii_lowercase().ends_with(".tar.gz")
+}
+
+fn infer_package_name(tarball: &Path) -> Option<String> {
+    let file_name = tarball.file_name()?.to_str()?;
+    let stem = file_name.strip_suffix(".tar.gz")?;
+    let package = stem.split_once('_').map(|(head, _)| head).unwrap_or(stem);
+    if package.is_empty() {
+        None
+    } else {
+        Some(package.to_string())
+    }
 }
 
 /// Runs reverse dependency checks for the repository under `repo_path`.
@@ -634,9 +683,8 @@ UBUNTU_CODENAME=noble
         .expect("prepared repository");
 
         assert!(repo_path.join("DESCRIPTION").exists());
-        let canonical_root = workspace_root
-            .canonicalize()
-            .expect("canonical workspace root");
-        assert!(repo_path.starts_with(&canonical_root));
+        let expected = workspace::canonicalized(&workspace_root.join("mypkg"))
+            .expect("canonical expected path");
+        assert_eq!(repo_path, expected);
     }
 }
