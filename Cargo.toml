@@ -16,7 +16,6 @@ authors = ["Nan Xiao <me@nanx.me>"]
 anyhow = "1.0.100"
 clap = { version = "4.5.51", features = ["derive"] }
 indicatif = "0.18.2"
-num_cpus = "1.17.0"
 reqwest = { version = "0.12.24", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
