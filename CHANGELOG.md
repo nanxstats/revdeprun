@@ -1,5 +1,13 @@
 # Changelog
 
+## revdeprun 1.1.1
+
+### Improvements
+
+- Update progress messages during R prerequisite installation to
+  accurately reflect that the system requirements being installed are
+  for the R package {pak}, rather than for revdep dependencies (#66).
+
 ## revdeprun 1.1.0
 
 ### New features
