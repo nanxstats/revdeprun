@@ -1,5 +1,13 @@
 # Changelog
 
+## revdeprun 1.2.1
+
+### Improvements
+
+- Align the reverse dependency run script options with yihui/crandalf defaults
+  with modifications so `xfun::rev_check()` has sensible browser, compilation,
+  timeout, sampling, and Markdown summary report retention settings.
+
 ## revdeprun 1.2.0
 
 ### Bug fixes
