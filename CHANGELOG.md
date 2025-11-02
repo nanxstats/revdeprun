@@ -4,7 +4,7 @@
 
 ### Bug fixes
 
-- Respect the provided number of workers detected by Rust or provided by user
+- Respect the number of workers detected by Rust or provided by user
   in `revdep.rs` instead of taking the max with `parallel::detectCores()`,
   to be consistent with `sysreqs.rs` (#77).
 
