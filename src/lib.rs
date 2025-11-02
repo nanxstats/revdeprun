@@ -32,7 +32,7 @@ pub fn run() -> Result<()> {
     }
 
     let progress = Progress::new();
-    let shell = Shell::new().context("failed to initialise shell environment")?;
+    let shell = Shell::new().context("failed to initialize shell environment")?;
 
     let workspace_label = args
         .work_dir

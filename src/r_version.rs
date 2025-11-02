@@ -59,7 +59,7 @@ fn http_client() -> Result<Client> {
         .context("failed to create HTTP client")
 }
 
-/// Normalises the version specification following the behaviour of setup-r.
+/// Normalizes the version specification following the behavior of setup-r.
 pub fn normalize_spec(spec: &str) -> String {
     match spec.trim() {
         "latest" | "4" | "4.x" | "4.x.x" => "release".to_string(),
@@ -129,7 +129,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn normalises_version_spec() {
+    fn normalizes_version_spec() {
         assert_eq!(normalize_spec("latest"), "release");
         assert_eq!(normalize_spec("4.x"), "release");
         assert_eq!(normalize_spec("3.x"), "3.6.3");
