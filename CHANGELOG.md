@@ -1,5 +1,12 @@
 # Changelog
 
+## revdeprun 1.1.2
+
+### Bug fixes
+
+- Install TinyTeX via Quarto commands used in official GitHub Actions workflows
+  and detect existing installations with the `quarto list tools` method.
+
 ## revdeprun 1.1.1
 
 ### Improvements
