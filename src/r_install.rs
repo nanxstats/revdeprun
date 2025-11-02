@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     env,
     fs::File,
     io::copy,
@@ -339,7 +338,7 @@ fn ensure_tinytex(shell: &Shell, progress: &Progress) -> Result<()> {
         "TinyTeX installed via Quarto",
         cmd!(
             shell,
-            "quarto install tinytex --no-prompt --log-level warning"
+            "quarto install tinytex --update-path --no-prompt --log-level warning"
         ),
     )?;
 
@@ -364,22 +363,41 @@ fn tinytex_is_installed(shell: &Shell) -> bool {
         return true;
     }
 
-    if let Ok(output) = cmd!(shell, "quarto list tools").ignore_status().read() {
-        let sanitized = strip_ansi_codes(&output);
-        for line in sanitized.lines() {
-            let trimmed = line.trim_start();
-            if let Some(first) = trimmed.split_whitespace().next() {
-                if first == "tinytex" {
-                    return !trimmed.contains("Not installed");
-                }
-            }
-        }
+    let bin_dirs = discover_tinytex_bin_dirs(shell);
+    if bin_dirs.iter().any(|dir| dir.join("tlmgr").exists()) {
+        return true;
     }
 
     false
 }
 
 fn link_tinytex_binaries(shell: &Shell, progress: &Progress) -> Result<()> {
+    let bin_dirs = discover_tinytex_bin_dirs(shell);
+
+    if bin_dirs.is_empty() {
+        progress.println("TinyTeX binaries not located; skipping symlink creation");
+        return Ok(());
+    }
+
+    for binary in ["tlmgr", "pdflatex", "xelatex", "lualatex"] {
+        if let Some(source) = bin_dirs
+            .iter()
+            .map(|dir| dir.join(binary))
+            .find(|candidate| candidate.exists())
+        {
+            run_command(
+                progress,
+                format!("Linking TinyTeX {binary}"),
+                format!("Linked /usr/local/bin/{binary}"),
+                cmd!(shell, "sudo ln -sf {source} /usr/local/bin/{binary}"),
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
+fn discover_tinytex_bin_dirs(shell: &Shell) -> Vec<PathBuf> {
     let mut bin_dirs = Vec::new();
 
     if let Ok(path_output) = cmd!(shell, "command -v tlmgr")
@@ -410,96 +428,7 @@ fn link_tinytex_binaries(shell: &Shell, progress: &Progress) -> Result<()> {
         }
     }
 
-    if bin_dirs.is_empty() {
-        progress.println("TinyTeX binaries not located; skipping symlink creation");
-        return Ok(());
-    }
-
-    for binary in ["tlmgr", "pdflatex", "xelatex", "lualatex"] {
-        if let Some(source) = bin_dirs
-            .iter()
-            .map(|dir| dir.join(binary))
-            .find(|candidate| candidate.exists())
-        {
-            run_command(
-                progress,
-                format!("Linking TinyTeX {binary}"),
-                format!("Linked /usr/local/bin/{binary}"),
-                cmd!(shell, "sudo ln -sf {source} /usr/local/bin/{binary}"),
-            )?;
-        }
-    }
-
-    Ok(())
-}
-
-fn strip_ansi_codes(input: &str) -> Cow<'_, str> {
-    if !input.contains('\x1b') {
-        return Cow::Borrowed(input);
-    }
-
-    let mut sanitized = String::with_capacity(input.len());
-    let mut index = 0;
-
-    while index < input.len() {
-        let ch = input[index..].chars().next().unwrap();
-        if ch != '\x1b' {
-            sanitized.push(ch);
-            index += ch.len_utf8();
-            continue;
-        }
-
-        index += ch.len_utf8();
-        if index >= input.len() {
-            break;
-        }
-
-        let next = input[index..].chars().next().unwrap();
-
-        if next == '[' {
-            index += next.len_utf8();
-            while index < input.len() {
-                let seq_char = input[index..].chars().next().unwrap();
-                index += seq_char.len_utf8();
-                if (seq_char as u32) >= 0x40 && (seq_char as u32) <= 0x7E {
-                    break;
-                }
-            }
-            continue;
-        }
-
-        if next == ']' {
-            index += next.len_utf8();
-            while index < input.len() {
-                let seq_char = input[index..].chars().next().unwrap();
-                index += seq_char.len_utf8();
-                if seq_char == '\u{0007}' {
-                    break;
-                }
-                if seq_char == '\x1b' {
-                    if index < input.len() {
-                        let maybe_backslash = input[index..].chars().next().unwrap();
-                        index += maybe_backslash.len_utf8();
-                        if maybe_backslash == '\\' {
-                            break;
-                        }
-                    }
-                }
-            }
-            continue;
-        }
-
-        index += next.len_utf8();
-        while index < input.len() {
-            let seq_char = input[index..].chars().next().unwrap();
-            index += seq_char.len_utf8();
-            if (seq_char as u32) >= 0x40 && (seq_char as u32) <= 0x7E {
-                break;
-            }
-        }
-    }
-
-    Cow::Owned(sanitized)
+    bin_dirs
 }
 
 fn ensure_curl(shell: &Shell, progress: &Progress) -> Result<()> {
