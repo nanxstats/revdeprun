@@ -557,7 +557,7 @@ if (!nzchar(package_name)) {{
 
 results <- xfun::rev_check(package_name, src = ".")
 # Remove this once https://github.com/yihui/xfun/pull/109 is merged and released
-compare_check()
+revdeprun_compare_check()
 invisible(results)
 "#
     );
