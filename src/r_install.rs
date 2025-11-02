@@ -10,7 +10,7 @@ use reqwest::blocking::Client;
 use tempfile::TempDir;
 use xshell::{Shell, cmd};
 
-use crate::{progress::Progress, r_version::ResolvedRVersion};
+use crate::{progress::Progress, r_version::ResolvedRVersion, util::emit_command_output};
 
 const QUARTO_VERSION: &str = "1.8.25";
 
@@ -159,22 +159,9 @@ fn run_command(
     }
 
     task.fail(format!("{start_message} (failed)"));
-    emit_stream(progress, &start_message, "stdout", &output.stdout);
-    emit_stream(progress, &start_message, "stderr", &output.stderr);
+    emit_command_output(progress, &start_message, &output.stdout, &output.stderr);
 
     bail!("{start_message} failed with status {}", output.status);
-}
-
-fn emit_stream(progress: &Progress, label: &str, stream_name: &str, bytes: &[u8]) {
-    if bytes.is_empty() {
-        return;
-    }
-    let text = String::from_utf8_lossy(bytes);
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return;
-    }
-    progress.println(format!("{label} {stream_name}:\n{trimmed}"));
 }
 
 struct DownloadedInstaller {
