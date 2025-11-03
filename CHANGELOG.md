@@ -8,7 +8,10 @@
   may appear in the hard dependencies list of the reverse dependencies.
   Reverse dependencies that ultimately depend on Bioconductor packages should
   no longer fail installation. This is done via `BiocManager::install()`,
-  pointing BiocManager to the Posit Public Package Manager repo and config.
+  pointing BiocManager to the Posit Public Package Manager repo and config,
+  reusing the unified repository list when installing CRAN binaries, and
+  resolving CRAN dependencies recursively so the binary pre-install does not
+  re-request Bioconductor-only packages.
 
 ## revdeprun 1.3.0
 

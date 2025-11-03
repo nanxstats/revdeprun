@@ -481,6 +481,18 @@ extra_deps <- intersect(extra_deps, available_packages)
 extra_deps <- setdiff(extra_deps, c(base_pkgs, cran_install_targets))
 cran_install_targets <- sort(unique(c(cran_install_targets, extra_deps)))
 
+recursive_dependency_map <- tools::package_dependencies(
+  packages = cran_install_targets,
+  db = db,
+  which = dependency_kinds,
+  recursive = TRUE
+)
+recursive_deps <- unique(unlist(recursive_dependency_map, use.names = FALSE))
+recursive_deps <- recursive_deps[!is.na(recursive_deps) & nzchar(recursive_deps)]
+recursive_deps <- intersect(recursive_deps, available_packages)
+recursive_deps <- setdiff(recursive_deps, c(base_pkgs, cran_install_targets))
+cran_install_targets <- sort(unique(c(cran_install_targets, recursive_deps)))
+
 if (length(revdeps) == 0) {{
   message("No CRAN reverse dependencies detected; installing package binary only.")
 }}
@@ -535,7 +547,8 @@ if (cran_target_count > 0) {{
     repos = install_repos,
     lib = library_dir,
     quiet = TRUE,
-    Ncpus = install_workers
+    Ncpus = install_workers,
+    dependencies = FALSE
   )
 }}
 
@@ -778,6 +791,7 @@ mod tests {
         assert!(script.contains("recursive = FALSE"));
         assert!(script.contains("install_repos <- getOption(\"repos\")"));
         assert!(script.contains("repos = install_repos"));
+        assert!(script.contains("dependencies = FALSE"));
         assert!(script.contains("BiocManager::install("));
         assert!(script.contains("dependencies = TRUE"));
         assert!(script.contains("installed.packages(lib.loc = library_dir)"));
