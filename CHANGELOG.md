@@ -2,11 +2,23 @@
 
 ## revdeprun 1.2.1
 
+### Bug fixes
+
+- Add and run a temporary workaround function to fix an issue where the
+  check comparison results are not written into the Markdown output by
+  `xfun::compare_Rcheck()` (#82).
+
 ### Improvements
 
 - Align the reverse dependency run script options with yihui/crandalf defaults
   with modifications so `xfun::rev_check()` has sensible browser, compilation,
-  timeout, sampling, and Markdown summary report retention settings.
+  timeout, sampling, and Markdown summary report retention settings (#81).
+
+### Documentation
+
+- Add `SECURITY.md` to document security risks, best practices, and
+  vulnerability reporting procedures. Update `README.md` to prominently
+  display security best practices with a more visible callout format (#83).
 
 ## revdeprun 1.2.0
 
