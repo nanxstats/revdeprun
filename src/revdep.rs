@@ -498,13 +498,7 @@ if (length(missing_packages) > 0) {{
     options(repos = c(posit = binary_repo, bioc_repos))
   }}
 
-  bioc_available <- tryCatch(
-    BiocManager::available(),
-    error = function(e) character()
-  )
-  bioc_targets <- intersect(missing_packages, bioc_available)
-  skipped_packages <- setdiff(missing_packages, bioc_targets)
-  missing_packages <- setdiff(missing_packages, bioc_targets)
+  bioc_targets <- missing_packages
 
   if (length(bioc_targets) > 0) {{
     BiocManager::install(
@@ -513,13 +507,21 @@ if (length(missing_packages) > 0) {{
       update = FALSE,
       quiet = TRUE,
       Ncpus = install_workers,
-      lib = library_dir
+      lib = library_dir,
+      dependencies = TRUE
     )
   }}
 
+  installed_bioc <- intersect(
+    bioc_targets,
+    rownames(installed.packages(lib.loc = library_dir))
+  )
+  skipped_packages <- setdiff(bioc_targets, installed_bioc)
+  missing_packages <- setdiff(missing_packages, installed_bioc)
+
   if (length(skipped_packages) > 0) {{
     message(
-      "Skipping packages not available from CRAN or Bioconductor: ",
+      "Failed to install Bioconductor packages: ",
       paste(skipped_packages, collapse = ", ")
     )
   }}
@@ -777,11 +779,13 @@ mod tests {
         assert!(script.contains("install_repos <- getOption(\"repos\")"));
         assert!(script.contains("repos = install_repos"));
         assert!(script.contains("BiocManager::install("));
+        assert!(script.contains("dependencies = TRUE"));
+        assert!(script.contains("installed.packages(lib.loc = library_dir)"));
         assert!(script.contains("revdep_dir <- file.path(getwd(), \"revdep\")"));
         assert!(script.contains(
             "revdep_dir <- normalizePath(revdep_dir, winslash = \"/\", mustWork = TRUE)"
         ));
-        assert!(script.contains("Skipping packages not available from CRAN or Bioconductor"));
+        assert!(script.contains("Failed to install Bioconductor packages: "));
         assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains(".libPaths(unique(c(library_dir, .libPaths())))"));
     }
