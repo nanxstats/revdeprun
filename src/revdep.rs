@@ -378,24 +378,14 @@ source_repo <- "https://packagemanager.posit.co/cran/latest"
 
 # Configure install options ----
 options(
-  repos = c(posit = binary_repo),
+  repos = c(CRAN = binary_repo, posit = binary_repo),
   BioC_mirror = "https://packagemanager.posit.co/bioconductor",
   Ncpus = install_workers
 )
 Sys.setenv(NOT_CRAN = "true")
 
-# Helper to ensure packages exist ----
-ensure_installed <- function(pkg, repo = source_repo) {{
-  if (!requireNamespace(pkg, quietly = TRUE)) {{
-    install.packages(
-      pkg,
-      repos = repo,
-      lib = library_dir,
-      quiet = TRUE,
-      Ncpus = install_workers
-    )
-  }}
-}}
+# Ensure pak is available ----
+ensure_pak(source_repo)
 
 # Ensure tooling prerequisites ----
 ensure_installed("xfun")
@@ -491,15 +481,15 @@ if (length(revdeps) == 0) {{
 
 # Install packages ----
 if (length(install_targets) > 0) {{
-  install.packages(
+  pak::pkg_install(
     install_targets,
-    repos = binary_repo,
     lib = library_dir,
-    quiet = TRUE,
-    Ncpus = install_workers
+    upgrade = FALSE,
+    ask = FALSE,
+    dependencies = NA
   )
 }} else {{
-  stop("No installation targets determined for install.packages().")
+  stop("No installation targets determined for pak::pkg_install().")
 }}
 "#
     );
@@ -525,18 +515,8 @@ options(
 )
 Sys.setenv(NOT_CRAN = "true")
 
-# Helper to ensure packages exist ----
-ensure_installed <- function(pkg) {{
-  if (!requireNamespace(pkg, quietly = TRUE)) {{
-    install.packages(
-      pkg,
-      repos = source_repo,
-      lib = library_dir,
-      quiet = TRUE,
-      Ncpus = install_workers
-    )
-  }}
-}}
+# Ensure pak is available ----
+ensure_pak(source_repo)
 
 # Ensure runtime prerequisites ----
 ensure_installed("xfun")
@@ -643,6 +623,31 @@ Sys.setenv(R_LIBS_USER = library_dir)
 # Configure parallelism ----
 install_workers <- {workers}
 options(Ncpus = install_workers)
+
+# Helpers for package installation ----
+ensure_pak <- function(repo) {{
+  if (!requireNamespace("pak", quietly = TRUE)) {{
+    install.packages(
+      "pak",
+      repos = repo,
+      lib = library_dir,
+      quiet = TRUE,
+      Ncpus = install_workers
+    )
+  }}
+}}
+
+ensure_installed <- function(pkg) {{
+  if (!requireNamespace(pkg, quietly = TRUE)) {{
+    pak::pkg_install(
+      pkg,
+      lib = library_dir,
+      upgrade = FALSE,
+      ask = FALSE,
+      dependencies = NA
+    )
+  }}
+}}
 "#
     )
 }
@@ -713,7 +718,9 @@ mod tests {
         assert!(script.contains(
             "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", 'noble')"
         ));
-        assert!(script.contains("install.packages("));
+        assert!(script.contains("install.packages(\n      \"pak\""));
+        assert!(script.contains("pak::pkg_install("));
+        assert!(script.contains("ensure_pak(source_repo)"));
         assert!(script.contains("parse_description_dependencies <- function"));
         assert!(
             script.contains("dev_package_deps <- parse_description_dependencies(\"DESCRIPTION\"")
@@ -727,7 +734,7 @@ mod tests {
         );
         assert!(script.contains("dependency_map <- tools::package_dependencies("));
         assert!(script.contains("recursive = FALSE"));
-        assert!(script.contains("repos = binary_repo"));
+        assert!(script.contains("repos = c(CRAN = binary_repo, posit = binary_repo)"));
         assert!(script.contains("revdep_dir <- file.path(getwd(), \"revdep\")"));
         assert!(script.contains(
             "revdep_dir <- normalizePath(revdep_dir, winslash = \"/\", mustWork = TRUE)"
@@ -747,6 +754,9 @@ mod tests {
         assert!(script.contains("mc.cores = install_workers"));
         assert!(script.contains("ensure_installed(\"markdown\")"));
         assert!(script.contains("ensure_installed(\"rmarkdown\")"));
+        assert!(script.contains("install.packages(\n      \"pak\""));
+        assert!(script.contains("pak::pkg_install("));
+        assert!(script.contains("ensure_pak(source_repo)"));
         assert!(script.contains("revdeprun_compare_check <- function"));
         assert!(script.contains("options("));
         assert!(script.contains("browser = \"false\""));
