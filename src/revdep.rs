@@ -449,6 +449,7 @@ revdeps <- setdiff(revdeps, base_pkgs)
 
 # Determine installation targets ----
 dependency_kinds <- c("Depends", "Imports", "LinkingTo", "Suggests")
+strong_dependency_kinds <- c("Depends", "Imports", "LinkingTo")
 cran_package_deps <- tools::package_dependencies(
   packages = package_name,
   db = db,
@@ -463,58 +464,93 @@ dev_package_deps <- setdiff(dev_package_deps, base_pkgs)
 
 install_targets <- sort(unique(c(package_name, dev_package_deps, cran_package_deps, revdeps)))
 
-available_packages <- rownames(db)
-missing_packages <- setdiff(install_targets, available_packages)
-cran_install_targets <- setdiff(install_targets, base_pkgs)
+available_cran_packages <- rownames(db)
+bioc_targets <- sort(unique(setdiff(install_targets, available_cran_packages)))
+cran_install_targets <- sort(unique(intersect(install_targets, available_cran_packages)))
 
-dependency_map <- tools::package_dependencies(
+cran_dependency_map <- tools::package_dependencies(
   packages = cran_install_targets,
   db = db,
-  which = dependency_kinds,
+  which = strong_dependency_kinds,
+  recursive = TRUE
+)
+cran_extra_deps <- unique(unlist(cran_dependency_map, use.names = FALSE))
+cran_extra_deps <- cran_extra_deps[!is.na(cran_extra_deps) & nzchar(cran_extra_deps)]
+cran_extra_deps <- intersect(cran_extra_deps, available_cran_packages)
+cran_extra_deps <- setdiff(cran_extra_deps, base_pkgs)
+cran_install_targets <- sort(unique(c(cran_install_targets, cran_extra_deps)))
+
+cran_suggest_map <- tools::package_dependencies(
+  packages = cran_install_targets,
+  db = db,
+  which = "Suggests",
   recursive = FALSE
 )
-extra_deps <- unique(unlist(dependency_map, use.names = FALSE))
-extra_deps <- extra_deps[!is.na(extra_deps) & nzchar(extra_deps)]
-extra_deps <- intersect(extra_deps, available_packages)
-extra_deps <- setdiff(extra_deps, base_pkgs)
-install_targets <- sort(unique(c(cran_install_targets, extra_deps)))
+cran_suggests <- unique(unlist(cran_suggest_map, use.names = FALSE))
+cran_suggests <- cran_suggests[!is.na(cran_suggests) & nzchar(cran_suggests)]
+cran_suggests <- setdiff(cran_suggests, base_pkgs)
+cran_suggest_cran <- intersect(cran_suggests, available_cran_packages)
+cran_suggest_bioc <- setdiff(cran_suggests, available_cran_packages)
+cran_install_targets <- sort(unique(c(cran_install_targets, cran_suggest_cran)))
+bioc_targets <- sort(unique(c(bioc_targets, cran_suggest_bioc)))
 
 if (length(revdeps) == 0) {{
   message("No CRAN reverse dependencies detected; installing package binary only.")
 }}
 
-# Install packages via BiocManager ----
-if (length(install_targets) == 0) {{
+if (length(cran_install_targets) == 0 && length(bioc_targets) == 0) {{
   stop("No installation targets determined for pre-installation.")
 }}
 
-ensure_installed("BiocManager", repo = source_repo)
+# Install Bioconductor packages ----
+if (length(bioc_targets) > 0) {{
+  ensure_installed("BiocManager", repo = source_repo)
 
-bioc_repos <- BiocManager::repositories()
-if (length(names(bioc_repos))) {{
-  if ("CRAN" %in% names(bioc_repos)) {{
-    bioc_repos["CRAN"] <- source_repo
+  bioc_repos <- BiocManager::repositories()
+  if (length(names(bioc_repos))) {{
+    if ("CRAN" %in% names(bioc_repos)) {{
+      bioc_repos["CRAN"] <- source_repo
+    }}
+    options(repos = c(posit = binary_repo, bioc_repos))
   }}
-  options(repos = c(posit = binary_repo, bioc_repos))
+
+  message("Installing Bioconductor packages: ", paste(bioc_targets, collapse = ", "))
+
+  bioc_result <- tryCatch(
+    {{
+      BiocManager::install(
+        bioc_targets,
+        ask = FALSE,
+        update = FALSE,
+        quiet = TRUE,
+        Ncpus = install_workers,
+        lib = library_dir,
+        dependencies = TRUE
+      )
+      TRUE
+    }},
+    error = function(e) {{
+      message("Bioconductor installation reported an error: ", conditionMessage(e))
+      FALSE
+    }}
+  )
+
+  if (!bioc_result) {{
+    message("Continuing despite Bioconductor installation errors.")
+  }}
 }}
 
-bioc_install <- setdiff(install_targets, available_packages)
-if (length(bioc_install) > 0) {{
-  message(
-    "Installing packages not available from CRAN via Bioconductor: ",
-    paste(bioc_install, collapse = ", ")
+# Install CRAN packages ----
+if (length(cran_install_targets) > 0) {{
+  install.packages(
+    cran_install_targets,
+    repos = binary_repo,
+    lib = library_dir,
+    quiet = TRUE,
+    Ncpus = install_workers,
+    dependencies = FALSE
   )
 }}
-
-BiocManager::install(
-  install_targets,
-  ask = FALSE,
-  update = FALSE,
-  quiet = TRUE,
-  Ncpus = install_workers,
-  lib = library_dir,
-  dependencies = TRUE
-)
 }}
 "#
     );
@@ -743,14 +779,27 @@ mod tests {
                 "install_targets <- sort(unique(c(package_name, dev_package_deps, cran_package_deps, revdeps)))"
             )
         );
+        assert!(script.contains(
+            "strong_dependency_kinds <- c(\"Depends\", \"Imports\", \"LinkingTo\")"
+        ));
+        assert!(script.contains("available_cran_packages <- rownames(db)"));
+        assert!(script.contains(
+            "cran_install_targets <- sort(unique(intersect(install_targets, available_cran_packages)))"
+        ));
+        assert!(script.contains("bioc_targets <- sort(unique(setdiff("));
         assert!(script.contains("ensure_installed(\"BiocManager\""));
         assert!(script.contains("dependency_map <- tools::package_dependencies("));
-        assert!(script.contains("recursive = FALSE"));
+        assert!(script.contains("which = strong_dependency_kinds"));
+        assert!(script.contains("recursive = TRUE"));
+        assert!(script.contains("cran_suggest_map <- tools::package_dependencies("));
+        assert!(script.contains("which = \"Suggests\""));
+        assert!(script.contains("cran_suggests <- unique(unlist("));
+        assert!(script.contains("cran_suggest_cran <- intersect("));
+        assert!(script.contains("cran_suggest_bioc <- setdiff("));
         assert!(script.contains("BiocManager::install("));
         assert!(script.contains("dependencies = TRUE"));
-        assert!(script.contains(
-            "Installing packages not available from CRAN via Bioconductor"
-        ));
+        assert!(script.contains("Installing Bioconductor packages: "));
+        assert!(script.contains("dependencies = FALSE"));
         assert!(script.contains("revdep_dir <- file.path(getwd(), \"revdep\")"));
         assert!(script.contains(
             "revdep_dir <- normalizePath(revdep_dir, winslash = \"/\", mustWork = TRUE)"

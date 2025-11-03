@@ -9,8 +9,8 @@
   Reverse dependencies that ultimately depend on Bioconductor packages should
   no longer fail installation. This is done via `BiocManager::install()`,
   pointing BiocManager to the Posit Public Package Manager repo and config,
-  and delegating all pre-installation to BiocManager so Bioconductor and CRAN
-  dependencies resolve consistently from the same repository set.
+  while keeping CRAN packages on the fast binary path and only installing
+  Bioconductor packages that are actually required.
 
 ## revdeprun 1.3.0
 
