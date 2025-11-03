@@ -1,12 +1,14 @@
 # Changelog
 
-## Unreleased
+## revdeprun 1.4.0
 
-### Bug fixes
+### Improvements
 
 - Install reverse dependency prerequisites with `pak::pkg_install()` so
   Bioconductor dependencies resolve automatically while still respecting
   the curated dependency set, retrying transient download failures.
+- Run reverse dependency installs under a headless display and
+  provision the required X11 tooling so Tcl/Tk packages compile reliably.
 
 ## revdeprun 1.3.0
 
