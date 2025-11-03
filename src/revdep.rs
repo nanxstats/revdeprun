@@ -639,7 +639,7 @@ pak_install_retry <- function(pkgs, attempts = 3) {{
               "pak::pkg_install failed (%d/%d) for %s: %s; retrying...",
               attempt,
               attempts,
-              paste(pkgs, collapse = \", \"),
+              paste(pkgs, collapse = ', '),
               conditionMessage(err)
             )
           )
@@ -734,7 +734,6 @@ mod tests {
     fn build_install_script_uses_binary_repo() {
         let path = Path::new("/tmp/example");
         let script = build_revdep_install_script(path, 8, "noble").expect("script must build");
-
         assert!(script.contains("https://packagemanager.posit.co/cran/__linux__/%s/latest"));
         assert!(script.contains(
             "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", 'noble')"
