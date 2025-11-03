@@ -465,9 +465,7 @@ install_targets <- sort(unique(c(package_name, dev_package_deps, cran_package_de
 
 available_packages <- rownames(db)
 missing_packages <- setdiff(install_targets, available_packages)
-bioc_targets <- character()
-cran_install_targets <- setdiff(install_targets, missing_packages)
-cran_install_targets <- setdiff(cran_install_targets, base_pkgs)
+cran_install_targets <- setdiff(install_targets, base_pkgs)
 
 dependency_map <- tools::package_dependencies(
   packages = cran_install_targets,
@@ -478,82 +476,45 @@ dependency_map <- tools::package_dependencies(
 extra_deps <- unique(unlist(dependency_map, use.names = FALSE))
 extra_deps <- extra_deps[!is.na(extra_deps) & nzchar(extra_deps)]
 extra_deps <- intersect(extra_deps, available_packages)
-extra_deps <- setdiff(extra_deps, c(base_pkgs, cran_install_targets))
-cran_install_targets <- sort(unique(c(cran_install_targets, extra_deps)))
-
-recursive_dependency_map <- tools::package_dependencies(
-  packages = cran_install_targets,
-  db = db,
-  which = dependency_kinds,
-  recursive = TRUE
-)
-recursive_deps <- unique(unlist(recursive_dependency_map, use.names = FALSE))
-recursive_deps <- recursive_deps[!is.na(recursive_deps) & nzchar(recursive_deps)]
-recursive_deps <- intersect(recursive_deps, available_packages)
-recursive_deps <- setdiff(recursive_deps, c(base_pkgs, cran_install_targets))
-cran_install_targets <- sort(unique(c(cran_install_targets, recursive_deps)))
+extra_deps <- setdiff(extra_deps, base_pkgs)
+install_targets <- sort(unique(c(cran_install_targets, extra_deps)))
 
 if (length(revdeps) == 0) {{
   message("No CRAN reverse dependencies detected; installing package binary only.")
 }}
 
-# Install Bioconductor packages ----
-cran_target_count <- length(cran_install_targets)
-if (length(missing_packages) > 0) {{
-  ensure_installed("BiocManager", repo = source_repo)
-
-  bioc_repos <- BiocManager::repositories()
-  if (length(names(bioc_repos))) {{
-    if ("CRAN" %in% names(bioc_repos)) {{
-      bioc_repos["CRAN"] <- source_repo
-    }}
-    options(repos = c(posit = binary_repo, bioc_repos))
-  }}
-
-  bioc_targets <- missing_packages
-
-  if (length(bioc_targets) > 0) {{
-    BiocManager::install(
-      bioc_targets,
-      ask = FALSE,
-      update = FALSE,
-      quiet = TRUE,
-      Ncpus = install_workers,
-      lib = library_dir,
-      dependencies = TRUE
-    )
-  }}
-
-  installed_bioc <- intersect(
-    bioc_targets,
-    rownames(installed.packages(lib.loc = library_dir))
-  )
-  skipped_packages <- setdiff(bioc_targets, installed_bioc)
-  missing_packages <- setdiff(missing_packages, installed_bioc)
-
-  if (length(skipped_packages) > 0) {{
-    message(
-      "Failed to install Bioconductor packages: ",
-      paste(skipped_packages, collapse = ", ")
-    )
-  }}
-}}
-
-# Install CRAN packages ----
-if (cran_target_count > 0) {{
-  install_repos <- getOption("repos")
-  install.packages(
-    cran_install_targets,
-    repos = install_repos,
-    lib = library_dir,
-    quiet = TRUE,
-    Ncpus = install_workers,
-    dependencies = FALSE
-  )
-}}
-
-if (cran_target_count == 0 && length(bioc_targets) == 0) {{
+# Install packages via BiocManager ----
+if (length(install_targets) == 0) {{
   stop("No installation targets determined for pre-installation.")
+}}
+
+ensure_installed("BiocManager", repo = source_repo)
+
+bioc_repos <- BiocManager::repositories()
+if (length(names(bioc_repos))) {{
+  if ("CRAN" %in% names(bioc_repos)) {{
+    bioc_repos["CRAN"] <- source_repo
+  }}
+  options(repos = c(posit = binary_repo, bioc_repos))
+}}
+
+bioc_install <- setdiff(install_targets, available_packages)
+if (length(bioc_install) > 0) {{
+  message(
+    "Installing packages not available from CRAN via Bioconductor: ",
+    paste(bioc_install, collapse = ", ")
+  )
+}}
+
+BiocManager::install(
+  install_targets,
+  ask = FALSE,
+  update = FALSE,
+  quiet = TRUE,
+  Ncpus = install_workers,
+  lib = library_dir,
+  dependencies = TRUE
+)
 }}
 "#
     );
@@ -768,7 +729,6 @@ mod tests {
         assert!(script.contains(
             "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", 'noble')"
         ));
-        assert!(script.contains("install.packages("));
         assert!(script.contains(
             "BIOCONDUCTOR_CONFIG_FILE = \"https://packagemanager.posit.co/bioconductor/latest/config.yaml\""
         ));
@@ -783,23 +743,18 @@ mod tests {
                 "install_targets <- sort(unique(c(package_name, dev_package_deps, cran_package_deps, revdeps)))"
             )
         );
-        assert!(
-            script.contains("cran_install_targets <- setdiff(install_targets, missing_packages)")
-        );
         assert!(script.contains("ensure_installed(\"BiocManager\""));
         assert!(script.contains("dependency_map <- tools::package_dependencies("));
         assert!(script.contains("recursive = FALSE"));
-        assert!(script.contains("install_repos <- getOption(\"repos\")"));
-        assert!(script.contains("repos = install_repos"));
-        assert!(script.contains("dependencies = FALSE"));
         assert!(script.contains("BiocManager::install("));
         assert!(script.contains("dependencies = TRUE"));
-        assert!(script.contains("installed.packages(lib.loc = library_dir)"));
+        assert!(script.contains(
+            "Installing packages not available from CRAN via Bioconductor"
+        ));
         assert!(script.contains("revdep_dir <- file.path(getwd(), \"revdep\")"));
         assert!(script.contains(
             "revdep_dir <- normalizePath(revdep_dir, winslash = \"/\", mustWork = TRUE)"
         ));
-        assert!(script.contains("Failed to install Bioconductor packages: "));
         assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains(".libPaths(unique(c(library_dir, .libPaths())))"));
     }
