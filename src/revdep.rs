@@ -486,7 +486,8 @@ if (length(revdeps) == 0) {{
 }}
 
 # Install CRAN packages ----
-if (length(cran_install_targets) > 0) {{
+cran_target_count <- length(cran_install_targets)
+if (cran_target_count > 0) {{
   install.packages(
     cran_install_targets,
     repos = binary_repo,
@@ -532,9 +533,11 @@ if (length(missing_packages) > 0) {{
       paste(skipped_packages, collapse = ", ")
     )
   }}
-}}
 
-if (length(cran_install_targets) == 0 && length(bioc_targets) == 0) {{
+  if (cran_target_count == 0 && length(bioc_targets) == 0) {{
+    stop("No installation targets determined for pre-installation.")
+  }}
+}} else if (cran_target_count == 0) {{
   stop("No installation targets determined for pre-installation.")
 }}
 "#
