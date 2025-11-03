@@ -485,19 +485,8 @@ if (length(revdeps) == 0) {{
   message("No CRAN reverse dependencies detected; installing package binary only.")
 }}
 
-# Install CRAN packages ----
-cran_target_count <- length(cran_install_targets)
-if (cran_target_count > 0) {{
-  install.packages(
-    cran_install_targets,
-    repos = binary_repo,
-    lib = library_dir,
-    quiet = TRUE,
-    Ncpus = install_workers
-  )
-}}
-
 # Install Bioconductor packages ----
+cran_target_count <- length(cran_install_targets)
 if (length(missing_packages) > 0) {{
   ensure_installed("BiocManager", repo = source_repo)
 
@@ -515,6 +504,7 @@ if (length(missing_packages) > 0) {{
   )
   bioc_targets <- intersect(missing_packages, bioc_available)
   skipped_packages <- setdiff(missing_packages, bioc_targets)
+  missing_packages <- setdiff(missing_packages, bioc_targets)
 
   if (length(bioc_targets) > 0) {{
     BiocManager::install(
@@ -533,11 +523,20 @@ if (length(missing_packages) > 0) {{
       paste(skipped_packages, collapse = ", ")
     )
   }}
+}}
 
-  if (cran_target_count == 0 && length(bioc_targets) == 0) {{
-    stop("No installation targets determined for pre-installation.")
-  }}
-}} else if (cran_target_count == 0) {{
+# Install CRAN packages ----
+if (cran_target_count > 0) {{
+  install.packages(
+    cran_install_targets,
+    repos = binary_repo,
+    lib = library_dir,
+    quiet = TRUE,
+    Ncpus = install_workers
+  )
+}}
+
+if (cran_target_count == 0 && length(bioc_targets) == 0) {{
   stop("No installation targets determined for pre-installation.")
 }}
 "#
@@ -768,9 +767,9 @@ mod tests {
                 "install_targets <- sort(unique(c(package_name, dev_package_deps, cran_package_deps, revdeps)))"
             )
         );
-        assert!(script.contains(
-            "cran_install_targets <- setdiff(install_targets, missing_packages)"
-        ));
+        assert!(
+            script.contains("cran_install_targets <- setdiff(install_targets, missing_packages)")
+        );
         assert!(script.contains("ensure_installed(\"BiocManager\""));
         assert!(script.contains("dependency_map <- tools::package_dependencies("));
         assert!(script.contains("recursive = FALSE"));
@@ -780,9 +779,7 @@ mod tests {
         assert!(script.contains(
             "revdep_dir <- normalizePath(revdep_dir, winslash = \"/\", mustWork = TRUE)"
         ));
-        assert!(script.contains(
-            "Skipping packages not available from CRAN or Bioconductor"
-        ));
+        assert!(script.contains("Skipping packages not available from CRAN or Bioconductor"));
         assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains(".libPaths(unique(c(library_dir, .libPaths())))"));
     }
