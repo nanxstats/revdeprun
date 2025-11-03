@@ -402,7 +402,7 @@ ensure_installed("xfun")
 
 # DESCRIPTION parsing helpers ----
 strip_version <- function(entries) {{
-  entries <- gsub('\\s*\\(.*?\\)', '', entries)
+  entries <- gsub("\\s*\\(.*?\\)", "", entries)
   trimws(entries)
 }}
 
