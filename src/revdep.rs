@@ -372,9 +372,11 @@ fn build_revdep_install_script(
     let script = format!(
         r#"{prelude}
 
+# Configure repositories ----
 binary_repo <- sprintf("https://packagemanager.posit.co/cran/__linux__/%s/latest", {codename_literal})
 source_repo <- "https://packagemanager.posit.co/cran/latest"
 
+# Configure install options ----
 options(
   repos = c(posit = binary_repo),
   BioC_mirror = "https://packagemanager.posit.co/bioconductor",
@@ -382,6 +384,7 @@ options(
 )
 Sys.setenv(NOT_CRAN = "true")
 
+# Helper to ensure packages exist ----
 ensure_installed <- function(pkg, repo = source_repo) {{
   if (!requireNamespace(pkg, quietly = TRUE)) {{
     install.packages(
@@ -394,8 +397,37 @@ ensure_installed <- function(pkg, repo = source_repo) {{
   }}
 }}
 
+# Ensure tooling prerequisites ----
 ensure_installed("xfun")
 
+# DESCRIPTION parsing helpers ----
+strip_version <- function(entries) {{
+  entries <- gsub('\\s*\\(.*?\\)', '', entries)
+  trimws(entries)
+}}
+
+parse_description_dependencies <- function(desc_path, fields) {{
+  if (!file.exists(desc_path)) {{
+    return(character())
+  }}
+  desc <- read.dcf(desc_path, fields = fields)
+  if (!nrow(desc)) {{
+    return(character())
+  }}
+  deps <- character()
+  for (field in intersect(fields, colnames(desc))) {{
+    value <- desc[1, field]
+    if (length(value) && !is.na(value) && nzchar(value)) {{
+      entries <- unlist(strsplit(value, ',', fixed = TRUE), use.names = FALSE)
+      entries <- strip_version(entries)
+      entries <- entries[nzchar(entries) & entries != 'R']
+      deps <- c(deps, entries)
+    }}
+  }}
+  sort(unique(deps))
+}}
+
+# Gather package metadata ----
 package_name <- read.dcf("DESCRIPTION", fields = "Package")[1, 1]
 if (!nzchar(package_name)) {{
   stop("Failed to read package name from DESCRIPTION")
@@ -414,7 +446,21 @@ revdeps <- sort(unique(stats::na.omit(revdeps)))
 base_pkgs <- unique(c(.BaseNamespaceEnv$basePackage, rownames(installed.packages(priority = "base"))))
 revdeps <- setdiff(revdeps, base_pkgs)
 
-install_targets <- sort(unique(c(package_name, revdeps)))
+# Determine installation targets ----
+dependency_kinds <- c("Depends", "Imports", "LinkingTo", "Suggests")
+cran_package_deps <- tools::package_dependencies(
+  packages = package_name,
+  db = db,
+  which = dependency_kinds,
+  reverse = FALSE
+)[[package_name]]
+cran_package_deps <- cran_package_deps[!is.na(cran_package_deps) & nzchar(cran_package_deps)]
+cran_package_deps <- setdiff(cran_package_deps, base_pkgs)
+
+dev_package_deps <- parse_description_dependencies("DESCRIPTION", dependency_kinds)
+dev_package_deps <- setdiff(dev_package_deps, base_pkgs)
+
+install_targets <- sort(unique(c(package_name, dev_package_deps, cran_package_deps, revdeps)))
 
 available_packages <- rownames(db)
 missing_packages <- setdiff(install_targets, available_packages)
@@ -425,8 +471,8 @@ if (length(missing_packages) > 0) {{
   )
 }}
 install_targets <- setdiff(install_targets, missing_packages)
+install_targets <- setdiff(install_targets, base_pkgs)
 
-dependency_kinds <- c("Depends", "Imports", "LinkingTo", "Suggests")
 dependency_map <- tools::package_dependencies(
   packages = install_targets,
   db = db,
@@ -443,6 +489,7 @@ if (length(revdeps) == 0) {{
   message("No CRAN reverse dependencies detected; installing package binary only.")
 }}
 
+# Install packages ----
 if (length(install_targets) > 0) {{
   install.packages(
     install_targets,
@@ -466,8 +513,10 @@ fn build_revdep_run_script(repo_path: &Path, num_workers: usize) -> Result<Strin
     let script = format!(
         r#"{prelude}
 
+# Configure repositories ----
 source_repo <- "https://packagemanager.posit.co/cran/latest"
 
+# Configure runtime options ----
 options(
   repos = c(CRAN = source_repo),
   BioC_mirror = "https://packagemanager.posit.co/bioconductor",
@@ -476,6 +525,7 @@ options(
 )
 Sys.setenv(NOT_CRAN = "true")
 
+# Helper to ensure packages exist ----
 ensure_installed <- function(pkg) {{
   if (!requireNamespace(pkg, quietly = TRUE)) {{
     install.packages(
@@ -488,10 +538,12 @@ ensure_installed <- function(pkg) {{
   }}
 }}
 
+# Ensure runtime prerequisites ----
 ensure_installed("xfun")
 ensure_installed("markdown")
 ensure_installed("rmarkdown")
 
+# Snapshot comparison helper ----
 # Remove this once https://github.com/yihui/xfun/pull/109 is merged and released
 revdeprun_compare_check <- function(status_only = TRUE, output = '00check_diffs.md') {{
   if (length(dirs <- list.files('.', '.+[.]Rcheck$')) == 0) {{
@@ -539,6 +591,7 @@ revdeprun_compare_check <- function(status_only = TRUE, output = '00check_diffs.
   html_file
 }}
 
+# Configure xfun::rev_check() options ----
 options(
   browser = "false",
   install.packages.compile.from.source = "always",
@@ -555,6 +608,7 @@ if (!nzchar(package_name)) {{
   stop("Failed to read package name from DESCRIPTION")
 }}
 
+# Run xfun::rev_check() ----
 results <- xfun::rev_check(package_name, src = ".")
 # Remove this once https://github.com/yihui/xfun/pull/109 is merged and released
 revdeprun_compare_check()
@@ -571,17 +625,20 @@ fn script_prelude(repo_path: &Path, num_workers: usize) -> String {
 
     format!(
         r#"
+# Prepare workspace directories ----
 setwd({path_literal})
 
 revdep_dir <- file.path("revdep")
 dir.create(revdep_dir, recursive = TRUE, showWarnings = FALSE)
 
+# Configure library paths ----
 library_dir <- file.path(revdep_dir, "library")
 dir.create(library_dir, recursive = TRUE, showWarnings = FALSE)
 
 Sys.setenv(R_LIBS_USER = library_dir)
 .libPaths(c(library_dir, .libPaths()))
 
+# Configure parallelism ----
 install_workers <- {workers}
 options(Ncpus = install_workers)
 "#
@@ -655,7 +712,17 @@ mod tests {
             "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", 'noble')"
         ));
         assert!(script.contains("install.packages("));
-        assert!(script.contains("install_targets <- sort(unique(c(package_name, revdeps)))"));
+        assert!(script.contains("parse_description_dependencies <- function"));
+        assert!(
+            script.contains("dev_package_deps <- parse_description_dependencies(\"DESCRIPTION\"")
+        );
+        assert!(script.contains("cran_package_deps <- tools::package_dependencies("));
+        assert!(script.contains("reverse = FALSE"));
+        assert!(
+            script.contains(
+                "install_targets <- sort(unique(c(package_name, dev_package_deps, cran_package_deps, revdeps)))"
+            )
+        );
         assert!(script.contains("dependency_map <- tools::package_dependencies("));
         assert!(script.contains("recursive = FALSE"));
         assert!(script.contains("repos = binary_repo"));
