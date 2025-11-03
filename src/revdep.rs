@@ -628,15 +628,17 @@ fn script_prelude(repo_path: &Path, num_workers: usize) -> String {
 # Prepare workspace directories ----
 setwd({path_literal})
 
-revdep_dir <- file.path("revdep")
+revdep_dir <- file.path(getwd(), "revdep")
 dir.create(revdep_dir, recursive = TRUE, showWarnings = FALSE)
+revdep_dir <- normalizePath(revdep_dir, winslash = "/", mustWork = TRUE)
 
 # Configure library paths ----
 library_dir <- file.path(revdep_dir, "library")
 dir.create(library_dir, recursive = TRUE, showWarnings = FALSE)
+library_dir <- normalizePath(library_dir, winslash = "/", mustWork = TRUE)
 
 Sys.setenv(R_LIBS_USER = library_dir)
-.libPaths(c(library_dir, .libPaths()))
+.libPaths(unique(c(library_dir, .libPaths())))
 
 # Configure parallelism ----
 install_workers <- {workers}
@@ -726,8 +728,13 @@ mod tests {
         assert!(script.contains("dependency_map <- tools::package_dependencies("));
         assert!(script.contains("recursive = FALSE"));
         assert!(script.contains("repos = binary_repo"));
+        assert!(script.contains("revdep_dir <- file.path(getwd(), \"revdep\")"));
+        assert!(script.contains(
+            "revdep_dir <- normalizePath(revdep_dir, winslash = \"/\", mustWork = TRUE)"
+        ));
         assert!(script.contains("Skipping packages not available from repository"));
         assert!(script.contains("setwd('/tmp/example')"));
+        assert!(script.contains(".libPaths(unique(c(library_dir, .libPaths())))"));
     }
 
     #[test]
@@ -752,6 +759,9 @@ mod tests {
         assert!(script.contains("xfun.rev_check.timeout_total = Inf"));
         assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains("library_dir <- file.path(revdep_dir, \"library\")"));
+        assert!(script.contains(
+            "library_dir <- normalizePath(library_dir, winslash = \"/\", mustWork = TRUE)"
+        ));
     }
 
     #[test]
