@@ -527,9 +527,10 @@ if (length(missing_packages) > 0) {{
 
 # Install CRAN packages ----
 if (cran_target_count > 0) {{
+  install_repos <- getOption("repos")
   install.packages(
     cran_install_targets,
-    repos = binary_repo,
+    repos = install_repos,
     lib = library_dir,
     quiet = TRUE,
     Ncpus = install_workers
@@ -773,7 +774,8 @@ mod tests {
         assert!(script.contains("ensure_installed(\"BiocManager\""));
         assert!(script.contains("dependency_map <- tools::package_dependencies("));
         assert!(script.contains("recursive = FALSE"));
-        assert!(script.contains("repos = binary_repo"));
+        assert!(script.contains("install_repos <- getOption(\"repos\")"));
+        assert!(script.contains("repos = install_repos"));
         assert!(script.contains("BiocManager::install("));
         assert!(script.contains("revdep_dir <- file.path(getwd(), \"revdep\")"));
         assert!(script.contains(
