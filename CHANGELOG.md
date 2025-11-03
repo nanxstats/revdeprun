@@ -1,5 +1,15 @@
 # Changelog
 
+## revdeprun 1.4.0
+
+### Bug fixes
+
+- Install Bioconductor dependencies during the pre-install phase since they
+  may appear in the hard dependencies list of the reverse dependencies.
+  Reverse dependencies that ultimately depend on Bioconductor packages should
+  no longer fail installation. This is done via `BiocManager::install()` and
+  pointing BiocManager to the Posit Public Package Manager repo and config.
+
 ## revdeprun 1.3.0
 
 ### Bug fixes
