@@ -1,5 +1,18 @@
 # Changelog
 
+## revdeprun 1.3.0
+
+### Bug fixes
+
+- Fix package installation errors by normalizing the revdep library path
+  to an **absolute path** so the generated R scripts always point to the
+  absolute library directory. This prevents silent library path setting
+  failures (!) and guarantees that `xfun::rev_check()` will always use the
+  correct library path containing the preinstalled binaries (#90).
+- Fix package building errors by enhancing the logic in `revdep.rs`
+  to parse and install the development dependencies for the package being
+  checked, from both the CRAN version and the development version (#88).
+
 ## revdeprun 1.2.1
 
 ### Bug fixes
