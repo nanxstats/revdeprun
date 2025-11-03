@@ -321,15 +321,8 @@ pub fn run_revcheck(
     let _dir_guard = shell.push_dir(repo_path);
 
     let install_task = progress.task("Installing revdep dependencies");
-    let install_result = progress.suspend(|| {
-        let install_max_connections = max_connections.to_string();
-        cmd!(
-            shell,
-            "Rscript --vanilla --max-connections={install_max_connections} {install_path}"
-        )
-        .quiet()
-        .run()
-    });
+    let install_result = progress
+        .suspend(|| run_rscript_with_virtual_display(shell, &install_path, max_connections));
 
     match install_result {
         Ok(_) => {
@@ -343,17 +336,32 @@ pub fn run_revcheck(
 
     progress.println("Launching xfun::rev_check()...");
     progress.suspend(|| {
-        let run_max_connections = max_connections.to_string();
-        cmd!(
-            shell,
-            "Rscript --vanilla --max-connections={run_max_connections} {run_path}"
-        )
-        .quiet()
-        .run()
-        .context("xfun::rev_check() reported an error")
+        run_rscript_with_virtual_display(shell, &run_path, max_connections)
+            .context("xfun::rev_check() reported an error")
     })?;
 
     Ok(())
+}
+
+fn run_rscript_with_virtual_display(
+    shell: &Shell,
+    script_path: &Path,
+    max_connections: usize,
+) -> Result<()> {
+    let server_args = "-screen 0 1600x900x24 -ac";
+    let max_connections_arg = max_connections.to_string();
+    cmd!(
+        shell,
+        "xvfb-run -a --server-args={server_args} Rscript --vanilla --max-connections={max_connections_arg} {script_path}"
+    )
+    .quiet()
+    .run()
+    .with_context(|| {
+        format!(
+            "failed to execute Rscript under xvfb-run for {}",
+            script_path.display()
+        )
+    })
 }
 
 /// Returns the default library directory created for xfun::rev_check().
