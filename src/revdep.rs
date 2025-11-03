@@ -481,13 +481,7 @@ if (length(revdeps) == 0) {{
 
 # Install packages ----
 if (length(install_targets) > 0) {{
-  pak::pkg_install(
-    install_targets,
-    lib = library_dir,
-    upgrade = FALSE,
-    ask = FALSE,
-    dependencies = NA
-  )
+  pak_install_retry(install_targets)
 }} else {{
   stop("No installation targets determined for pak::pkg_install().")
 }}
@@ -625,6 +619,39 @@ install_workers <- {workers}
 options(Ncpus = install_workers)
 
 # Helpers for package installation ----
+pak_install_retry <- function(pkgs, attempts = 3) {{
+  for (attempt in seq_len(attempts)) {{
+    tryCatch(
+      {{
+        pak::pkg_install(
+          pkgs,
+          lib = library_dir,
+          upgrade = FALSE,
+          ask = FALSE,
+          dependencies = NA
+        )
+        return(invisible(TRUE))
+      }},
+      error = function(err) {{
+        if (attempt < attempts) {{
+          message(
+            sprintf(
+              "pak::pkg_install failed (%d/%d) for %s: %s; retrying...",
+              attempt,
+              attempts,
+              paste(pkgs, collapse = \", \"),
+              conditionMessage(err)
+            )
+          )
+          Sys.sleep(3)
+        }} else {{
+          stop(err)
+        }}
+      }}
+    )
+  }}
+}}
+
 ensure_pak <- function(repo) {{
   if (!requireNamespace("pak", quietly = TRUE)) {{
     install.packages(
@@ -639,13 +666,7 @@ ensure_pak <- function(repo) {{
 
 ensure_installed <- function(pkg) {{
   if (!requireNamespace(pkg, quietly = TRUE)) {{
-    pak::pkg_install(
-      pkg,
-      lib = library_dir,
-      upgrade = FALSE,
-      ask = FALSE,
-      dependencies = NA
-    )
+    pak_install_retry(pkg)
   }}
 }}
 "#
@@ -720,6 +741,9 @@ mod tests {
         ));
         assert!(script.contains("install.packages(\n      \"pak\""));
         assert!(script.contains("pak::pkg_install("));
+        assert!(script.contains("pak_install_retry <- function"));
+        assert!(script.contains("pak_install_retry(pkg)"));
+        assert!(script.contains("pak_install_retry(install_targets)"));
         assert!(script.contains("ensure_pak(source_repo)"));
         assert!(script.contains("parse_description_dependencies <- function"));
         assert!(
@@ -756,6 +780,8 @@ mod tests {
         assert!(script.contains("ensure_installed(\"rmarkdown\")"));
         assert!(script.contains("install.packages(\n      \"pak\""));
         assert!(script.contains("pak::pkg_install("));
+        assert!(script.contains("pak_install_retry <- function"));
+        assert!(script.contains("pak_install_retry(pkg)"));
         assert!(script.contains("ensure_pak(source_repo)"));
         assert!(script.contains("revdeprun_compare_check <- function"));
         assert!(script.contains("options("));

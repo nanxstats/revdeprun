@@ -6,7 +6,7 @@
 
 - Install reverse dependency prerequisites with `pak::pkg_install()` so
   Bioconductor dependencies resolve automatically while still respecting
-  the curated dependency set.
+  the curated dependency set, retrying transient download failures.
 
 ## revdeprun 1.3.0
 
