@@ -627,37 +627,143 @@ install_workers <- {workers}
 options(Ncpus = install_workers)
 
 # Helpers for package installation ----
-pak_install_retry <- function(pkgs, attempts = 3) {{
-  for (attempt in seq_len(attempts)) {{
-    tryCatch(
+revdep_library_packages <- function() {{
+  entries <- dir(library_dir, full.names = TRUE, recursive = FALSE)
+  if (!length(entries)) {{
+    return(character())
+  }}
+  details <- file.info(entries)
+  is_dir <- !is.na(details$isdir) & details$isdir
+  entries <- entries[is_dir]
+  pkgs <- basename(entries)
+  pkgs <- pkgs[!grepl('^_', pkgs)]
+  pkgs <- pkgs[!grepl('^00LOCK-', pkgs)]
+  pkgs[nzchar(pkgs)]
+}}
+
+identify_installation_failures <- function(msg) {{
+  patterns <- c(
+    "Failed to build source package ([^\\.\\s]+)",
+    "Failed to install source package ([^\\.\\s]+)",
+    "Failed to build binary package ([^\\.\\s]+)",
+    "Failed to install binary package ([^\\.\\s]+)",
+    "configuration failed for package '([^']+)'",
+    "compilation failed for package '([^']+)'"
+  )
+  failures <- character()
+  for (pattern in patterns) {{
+    matches <- regmatches(msg, gregexpr(pattern, msg, perl = TRUE))
+    if (length(matches) && length(matches[[1]])) {{
+      extracted <- gsub(pattern, "\\\\1", matches[[1]], perl = TRUE)
+      failures <- c(failures, extracted)
+    }}
+  }}
+  sort(unique(failures))
+}}
+
+is_download_failure <- function(msg, err) {{
+  keywords <- c(
+    "Failed to download",
+    "HTTP error",
+    "timed out",
+    "timeout",
+    "Could not resolve host",
+    "connection reset",
+    "could not connect"
+  )
+  any(vapply(
+    keywords,
+    function(pattern) grepl(pattern, msg, ignore.case = TRUE, useBytes = TRUE),
+    logical(1)
+  ))
+}}
+
+pak_install_retry <- function(
+  pkgs,
+  max_attempts = 3,
+  max_download_attempts = 6,
+  sleep_seconds = 3
+) {{
+  pending <- sort(unique(pkgs))
+  if (!length(pending)) {{
+    return(invisible(TRUE))
+  }}
+
+  attempt <- 0
+  download_attempts <- 0
+  permanent_failures <- character()
+
+  while (length(pending)) {{
+    pending <- setdiff(pending, revdep_library_packages())
+    if (!length(pending)) {{
+      break
+    }}
+
+    attempt <- attempt + 1
+
+    try_result <- tryCatch(
       {{
         pak::pkg_install(
-          pkgs,
+          pending,
           lib = library_dir,
           upgrade = FALSE,
           ask = FALSE,
           dependencies = NA
         )
-        return(invisible(TRUE))
+        TRUE
       }},
       error = function(err) {{
-        if (attempt < attempts) {{
-          message(
-            sprintf(
-              "pak::pkg_install failed (%d/%d) for %s: %s; retrying...",
-              attempt,
-              attempts,
-              paste(pkgs, collapse = ', '),
-              conditionMessage(err)
-            )
-          )
-          Sys.sleep(3)
-        }} else {{
-          stop(err)
+        error_message <- conditionMessage(err)
+        pending <<- setdiff(pending, revdep_library_packages())
+
+        failed_pkgs <- identify_installation_failures(error_message)
+        failed_pkgs <- intersect(failed_pkgs, pending)
+        if (length(failed_pkgs)) {{
+          permanent_failures <<- union(permanent_failures, failed_pkgs)
+          pending <<- setdiff(pending, failed_pkgs)
+          message(sprintf(
+            "Removing packages that failed to build: %s",
+            paste(failed_pkgs, collapse = ', ')
+          ))
         }}
+
+        download_failure <- is_download_failure(error_message, err)
+        if (download_failure) {{
+          download_attempts <<- download_attempts + 1
+        }}
+
+        allowed_attempts <- if (download_failure) max_download_attempts else max_attempts
+        current_attempt <- if (download_failure) download_attempts else attempt
+
+        if (length(pending) && current_attempt < allowed_attempts) {{
+          message(sprintf(
+            "pak::pkg_install failed (%d/%d) for %s: %s; retrying...",
+            current_attempt,
+            allowed_attempts,
+            paste(pending, collapse = ', '),
+            error_message
+          ))
+          Sys.sleep(sleep_seconds)
+          return(FALSE)
+        }}
+
+        stop(err)
       }}
     )
+
+    if (!identical(try_result, TRUE)) {{
+      next
+    }}
   }}
+
+  if (length(permanent_failures)) {{
+    message(sprintf(
+      "Skipped packages with persistent build failures: %s",
+      paste(permanent_failures, collapse = ', ')
+    ))
+  }}
+
+  invisible(TRUE)
 }}
 
 ensure_pak <- function(repo) {{
@@ -748,9 +854,15 @@ mod tests {
         ));
         assert!(script.contains("install.packages(\n      \"pak\""));
         assert!(script.contains("pak::pkg_install("));
+        assert!(script.contains("revdep_library_packages <- function"));
+        assert!(script.contains("identify_installation_failures <- function"));
+        assert!(script.contains("is_download_failure <- function"));
         assert!(script.contains("pak_install_retry <- function"));
         assert!(script.contains("pak_install_retry(pkg)"));
         assert!(script.contains("pak_install_retry(install_targets)"));
+        assert!(script.contains("Removing packages that failed to build"));
+        assert!(script.contains("Skipped packages with persistent build failures"));
+        assert!(script.contains("setdiff(pending, revdep_library_packages())"));
         assert!(script.contains("ensure_pak(source_repo)"));
         assert!(script.contains("parse_description_dependencies <- function"));
         assert!(
@@ -787,8 +899,14 @@ mod tests {
         assert!(script.contains("ensure_installed(\"rmarkdown\")"));
         assert!(script.contains("install.packages(\n      \"pak\""));
         assert!(script.contains("pak::pkg_install("));
+        assert!(script.contains("revdep_library_packages <- function"));
+        assert!(script.contains("identify_installation_failures <- function"));
+        assert!(script.contains("is_download_failure <- function"));
         assert!(script.contains("pak_install_retry <- function"));
         assert!(script.contains("pak_install_retry(pkg)"));
+        assert!(script.contains("Removing packages that failed to build"));
+        assert!(script.contains("Skipped packages with persistent build failures"));
+        assert!(script.contains("setdiff(pending, revdep_library_packages())"));
         assert!(script.contains("ensure_pak(source_repo)"));
         assert!(script.contains("revdeprun_compare_check <- function"));
         assert!(script.contains("options("));

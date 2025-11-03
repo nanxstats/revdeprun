@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Improvements
+
+- Install dependencies of reverse dependencies with a more robust strategy
+  by skipping packages that repeatedly fail to build, retrying transient
+  download errors more often, and avoiding redundant installations of
+  already installed packages.
+
 ## revdeprun 1.4.0
 
 ### Improvements
