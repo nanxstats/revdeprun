@@ -627,12 +627,31 @@ install_workers <- {workers}
 options(Ncpus = install_workers)
 
 # Helpers for package installation ----
-pak_install_retry <- function(pkgs, attempts = 3) {{
+pak_install_retry <- function(pkgs, attempts = 5) {{
+  pkgs <- as.character(pkgs)
+  pkgs <- pkgs[!is.na(pkgs) & nzchar(pkgs)]
+  if (!length(pkgs)) {{
+    return(invisible(TRUE))
+  }}
+
+  install_pkgs <- vapply(
+    pkgs,
+    function(pkg) {{
+      if (grepl("\\?", pkg)) {{
+        pkg
+      }} else {{
+        paste0(pkg, "?ignore-build-errors&ignore-unavailable")
+      }}
+    }},
+    FUN.VALUE = character(1),
+    USE.NAMES = FALSE
+  )
+
   for (attempt in seq_len(attempts)) {{
     tryCatch(
       {{
         pak::pkg_install(
-          pkgs,
+          install_pkgs,
           lib = library_dir,
           upgrade = FALSE,
           ask = FALSE,
@@ -749,8 +768,10 @@ mod tests {
         assert!(script.contains("install.packages(\n      \"pak\""));
         assert!(script.contains("pak::pkg_install("));
         assert!(script.contains("pak_install_retry <- function"));
+        assert!(script.contains("pak_install_retry <- function(pkgs, attempts = 5)"));
         assert!(script.contains("pak_install_retry(pkg)"));
         assert!(script.contains("pak_install_retry(install_targets)"));
+        assert!(script.contains("?ignore-build-errors&ignore-unavailable"));
         assert!(script.contains("ensure_pak(source_repo)"));
         assert!(script.contains("parse_description_dependencies <- function"));
         assert!(
@@ -788,8 +809,10 @@ mod tests {
         assert!(script.contains("install.packages(\n      \"pak\""));
         assert!(script.contains("pak::pkg_install("));
         assert!(script.contains("pak_install_retry <- function"));
+        assert!(script.contains("pak_install_retry <- function(pkgs, attempts = 5)"));
         assert!(script.contains("pak_install_retry(pkg)"));
         assert!(script.contains("ensure_pak(source_repo)"));
+        assert!(script.contains("?ignore-build-errors&ignore-unavailable"));
         assert!(script.contains("revdeprun_compare_check <- function"));
         assert!(script.contains("options("));
         assert!(script.contains("browser = \"false\""));

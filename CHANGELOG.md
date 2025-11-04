@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Improvements
+
+- Skip reverse dependency packages that fail to build or are unavailable by
+  appending pak's ignore qualifiers and extend retry attempts for transient
+  download errors during the pre-installation phase.
+
 ## revdeprun 1.4.0
 
 ### Improvements
