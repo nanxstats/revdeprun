@@ -1,5 +1,12 @@
 # Changelog
 
+## revdeprun 1.4.2
+
+### Improvements
+
+- Always install the latest stable Quarto release by resolving the version
+  number from the official download metadata.
+
 ## revdeprun 1.4.1
 
 ### Improvements
