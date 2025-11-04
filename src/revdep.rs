@@ -637,7 +637,7 @@ pak_install_retry <- function(pkgs, attempts = 5) {{
   install_pkgs <- vapply(
     pkgs,
     function(pkg) {{
-      if (grepl("=\\?", pkg, fixed = FALSE)) {{
+      if (grepl("\\?", pkg)) {{
         pkg
       }} else {{
         paste0(pkg, "?ignore-build-errors&ignore-unavailable")
