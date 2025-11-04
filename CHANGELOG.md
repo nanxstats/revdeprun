@@ -4,9 +4,11 @@
 
 ### Improvements
 
-- Skip reverse dependency packages that fail to build or are unavailable by
-  appending pak's ignore qualifiers and extend retry attempts for transient
-  download errors during the pre-installation phase.
+- Skip reverse dependency packages that fail to build or are unavailable
+  by appending pak ignore qualifiers during pre-installation.
+  Retry attempts for transient download errors increased from 3 to 5.
+- Revert headless X11 display changes from #97. The `Rscript` command now
+  runs directly as packages that fail to build are skipped automatically.
 
 ## revdeprun 1.4.0
 
