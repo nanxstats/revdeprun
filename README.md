@@ -158,6 +158,19 @@ Use an existing R installation:
 revdeprun --skip-r-install https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
 ```
 
+## Monitor long-running checks
+
+Reverse dependency checks can take hours to complete, especially for packages
+with many reverse dependencies. If you are monitoring progress via
+an SSH session from your local machine, consider preventing your computer from
+sleeping to maintain an uninterrupted connection and keep progress output
+streams continuously to your terminal:
+
+- macOS: Open a new terminal window and run `caffeinate -d` to keep the
+  display and system awake. Press `Ctrl + C` to stop when the check is complete.
+- Windows: Use [PowerToys Awake](https://learn.microsoft.com/en-us/windows/powertoys/awake)
+  to keep your system awake.
+
 ## License
 
 This project is licensed under the MIT License.
