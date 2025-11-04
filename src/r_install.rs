@@ -7,12 +7,13 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 use reqwest::blocking::Client;
+use serde::Deserialize;
 use tempfile::TempDir;
 use xshell::{Shell, cmd};
 
 use crate::{progress::Progress, r_version::ResolvedRVersion, util::emit_command_output};
 
-const QUARTO_VERSION: &str = "1.8.25";
+const QUARTO_DOWNLOAD_INFO_URL: &str = "https://quarto.org/docs/download/_download.json";
 
 /// Ensures the requested R toolchain is installed system-wide.
 pub fn install_r(shell: &Shell, version: &ResolvedRVersion, progress: &Progress) -> Result<()> {
@@ -204,49 +205,52 @@ fn download_installer(version: &ResolvedRVersion) -> Result<DownloadedInstaller>
 fn ensure_quarto(shell: &Shell, progress: &Progress) -> Result<()> {
     ensure_curl(shell, progress)?;
 
-    let check_task = progress.task(format!("Checking existing Quarto {QUARTO_VERSION}"));
+    let client = http_client()?;
+    let quarto_version = latest_quarto_version(&client)?;
+
+    let check_task = progress.task(format!("Checking existing Quarto {quarto_version}"));
     let already_installed = match cmd!(shell, "quarto --version")
         .quiet()
         .ignore_status()
         .read()
     {
-        Ok(output) => output.contains(QUARTO_VERSION),
+        Ok(output) => output.contains(&quarto_version),
         Err(_) => false,
     };
 
     if already_installed {
-        check_task.finish_with_message(format!("Using existing Quarto {QUARTO_VERSION}"));
+        check_task.finish_with_message(format!("Using existing Quarto {quarto_version}"));
         return Ok(());
     }
-    check_task.finish_with_message(format!("Quarto {QUARTO_VERSION} not detected; installing"));
+    check_task.finish_with_message(format!("Quarto {quarto_version} not detected; installing"));
 
     run_command(
         progress,
-        format!("Creating /opt/quarto/{QUARTO_VERSION}"),
-        format!("Prepared /opt/quarto/{QUARTO_VERSION}"),
-        cmd!(shell, "sudo mkdir -p /opt/quarto/{QUARTO_VERSION}"),
+        format!("Creating /opt/quarto/{quarto_version}"),
+        format!("Prepared /opt/quarto/{quarto_version}"),
+        cmd!(shell, "sudo mkdir -p /opt/quarto/{quarto_version}"),
     )?;
 
-    let tarball_path = format!("/tmp/quarto-{QUARTO_VERSION}.tar.gz");
+    let tarball_path = format!("/tmp/quarto-{quarto_version}.tar.gz");
     let download_url = format!(
         "https://github.com/quarto-dev/quarto-cli/releases/download/v{}/quarto-{}-linux-amd64.tar.gz",
-        QUARTO_VERSION, QUARTO_VERSION
+        quarto_version, quarto_version
     );
 
     run_command(
         progress,
-        format!("Downloading Quarto {QUARTO_VERSION} bundle"),
-        format!("Downloaded Quarto {QUARTO_VERSION} bundle"),
+        format!("Downloading Quarto {quarto_version} bundle"),
+        format!("Downloaded Quarto {quarto_version} bundle"),
         cmd!(shell, "curl -fsSL -o {tarball_path} -L {download_url}"),
     )?;
 
     run_command(
         progress,
-        format!("Extracting Quarto {QUARTO_VERSION} bundle"),
-        format!("Installed Quarto {QUARTO_VERSION} to /opt/quarto/{QUARTO_VERSION}"),
+        format!("Extracting Quarto {quarto_version} bundle"),
+        format!("Installed Quarto {quarto_version} to /opt/quarto/{quarto_version}"),
         cmd!(
             shell,
-            "sudo tar -xzf {tarball_path} -C /opt/quarto/{QUARTO_VERSION} --strip-components=1"
+            "sudo tar -xzf {tarball_path} -C /opt/quarto/{quarto_version} --strip-components=1"
         ),
     )?;
 
@@ -260,14 +264,14 @@ fn ensure_quarto(shell: &Shell, progress: &Progress) -> Result<()> {
     run_command(
         progress,
         "Linking Quarto binary",
-        format!("Linked /usr/local/bin/quarto -> /opt/quarto/{QUARTO_VERSION}/bin/quarto"),
+        format!("Linked /usr/local/bin/quarto -> /opt/quarto/{quarto_version}/bin/quarto"),
         cmd!(
             shell,
-            "sudo ln -sf /opt/quarto/{QUARTO_VERSION}/bin/quarto /usr/local/bin/quarto"
+            "sudo ln -sf /opt/quarto/{quarto_version}/bin/quarto /usr/local/bin/quarto"
         ),
     )?;
 
-    progress.println(format!("Quarto {QUARTO_VERSION} installation completed"));
+    progress.println(format!("Quarto {quarto_version} installation completed"));
 
     Ok(())
 }
@@ -455,6 +459,26 @@ fn http_client() -> Result<Client> {
         .user_agent(format!("revdeprun/{}", env!("CARGO_PKG_VERSION")))
         .build()
         .context("failed to construct HTTP client")
+}
+
+fn latest_quarto_version(client: &Client) -> Result<String> {
+    #[derive(Deserialize)]
+    struct QuartoDownloadInfo {
+        version: String,
+    }
+
+    let response = client
+        .get(QUARTO_DOWNLOAD_INFO_URL)
+        .send()
+        .context("failed to request Quarto download metadata")?
+        .error_for_status()
+        .context("Quarto download metadata request returned error status")?;
+
+    let metadata: QuartoDownloadInfo = response
+        .json()
+        .context("failed to deserialize Quarto download metadata")?;
+
+    Ok(metadata.version)
 }
 
 fn file_name_from_url(url: &str) -> Result<String> {
