@@ -641,27 +641,100 @@ revdep_library_packages <- function() {{
   pkgs[nzchar(pkgs)]
 }}
 
-identify_installation_failures <- function(msg) {{
+collect_condition_messages <- function(cond, max_depth = 10) {{
+  messages <- character()
+
+  extract_characters <- function(value, depth = 0, limit = 3) {{
+    if (depth > limit) {{
+      return(character())
+    }}
+    if (is.character(value)) {{
+      return(value)
+    }}
+    if (is.list(value)) {{
+      out <- character()
+      for (item in value) {{
+        out <- c(out, extract_characters(item, depth + 1, limit))
+      }}
+      return(out)
+    }}
+    character()
+  }}
+
+  current <- cond
+  depth <- 0
+  while (!is.null(current) && depth < max_depth) {{
+    depth <- depth + 1
+
+    msg <- tryCatch(conditionMessage(current), error = function(...) "") 
+    if (length(msg) && nzchar(msg)) {{
+      messages <- c(messages, msg)
+    }}
+
+    printed <- tryCatch(utils::capture.output(print(current)), error = function(...) character())
+    messages <- c(messages, printed)
+
+    extras <- tryCatch(extract_characters(as.list(current)), error = function(...) character())
+    messages <- c(messages, extras)
+
+    parent <- tryCatch(current$parent, error = function(...) NULL)
+    if (is.null(parent) || identical(parent, current)) {{
+      break
+    }}
+    current <- parent
+  }}
+
+  unique(messages[nzchar(messages)])
+}}
+
+collect_error_context <- function(err, primary_message) {{
+  context <- unique(c(
+    primary_message,
+    collect_condition_messages(err)
+  ))
+  if (!length(context)) {{
+    context <- primary_message
+  }}
+  context[nzchar(context)]
+}}
+
+identify_installation_failures <- function(context_lines) {{
+  if (!length(context_lines)) {{
+    return(character())
+  }}
+  context <- paste(context_lines, collapse = "\n")
   patterns <- c(
-    "Failed to build source package ([^\\.\\s]+)",
-    "Failed to install source package ([^\\.\\s]+)",
-    "Failed to build binary package ([^\\.\\s]+)",
-    "Failed to install binary package ([^\\.\\s]+)",
-    "configuration failed for package '([^']+)'",
-    "compilation failed for package '([^']+)'"
+    "Failed to build source package ['\\\"]?([[:alnum:]._-]+)",
+    "Failed to install source package ['\\\"]?([[:alnum:]._-]+)",
+    "Failed to build binary package ['\\\"]?([[:alnum:]._-]+)",
+    "Failed to install binary package ['\\\"]?([[:alnum:]._-]+)",
+    "Failed to build ['\\\"]?([[:alnum:]._-]+)",
+    "configuration failed for package ['\\\"]([^'\\\"]+)['\\\"]",
+    "compilation failed for package ['\\\"]([^'\\\"]+)['\\\"]",
+    "package ['\\\"]([^'\\\"]+)['\\\"] had non-zero exit status",
+    "\\* removing ['\\\"]?.*/([^/'\\\"]+)['\\\"]?"
   )
   failures <- character()
   for (pattern in patterns) {{
-    matches <- regmatches(msg, gregexpr(pattern, msg, perl = TRUE))
-    if (length(matches) && length(matches[[1]])) {{
-      extracted <- gsub(pattern, "\\\\1", matches[[1]], perl = TRUE)
+    matches <- gregexpr(pattern, context, perl = TRUE)
+    if (length(matches) && length(matches[[1]]) && matches[[1]][1] != -1) {{
+      extracted <- regmatches(context, matches)
+      extracted <- gsub(pattern, "\\\\1", unlist(extracted, use.names = FALSE), perl = TRUE)
       failures <- c(failures, extracted)
     }}
+  }}
+  if (!length(failures) && length(context_lines)) {{
+    inferred <- unique(gsub("^['\\\"]|['\\\"]$", "", context_lines))
+    failures <- c(failures, inferred[grepl("^[[:alnum:]._-]+$", inferred)])
   }}
   sort(unique(failures))
 }}
 
-is_download_failure <- function(msg, err) {{
+is_download_failure <- function(context_lines) {{
+  if (!length(context_lines)) {{
+    return(FALSE)
+  }}
+  context <- paste(context_lines, collapse = "\n")
   keywords <- c(
     "Failed to download",
     "HTTP error",
@@ -673,7 +746,7 @@ is_download_failure <- function(msg, err) {{
   )
   any(vapply(
     keywords,
-    function(pattern) grepl(pattern, msg, ignore.case = TRUE, useBytes = TRUE),
+    function(pattern) grepl(pattern, context, ignore.case = TRUE, useBytes = TRUE),
     logical(1)
   ))
 }}
@@ -689,7 +762,7 @@ pak_install_retry <- function(
     return(invisible(TRUE))
   }}
 
-  attempt <- 0
+  build_attempts <- 0
   download_attempts <- 0
   permanent_failures <- character()
 
@@ -699,10 +772,8 @@ pak_install_retry <- function(
       break
     }}
 
-    attempt <- attempt + 1
-
-    try_result <- tryCatch(
-      {{
+    install_error <- tryCatch(
+      expr = {{
         pak::pkg_install(
           pending,
           lib = library_dir,
@@ -710,50 +781,62 @@ pak_install_retry <- function(
           ask = FALSE,
           dependencies = NA
         )
-        TRUE
+        NULL
       }},
       error = function(err) {{
-        error_message <- conditionMessage(err)
-        pending <<- setdiff(pending, revdep_library_packages())
-
-        failed_pkgs <- identify_installation_failures(error_message)
-        failed_pkgs <- intersect(failed_pkgs, pending)
-        if (length(failed_pkgs)) {{
-          permanent_failures <<- union(permanent_failures, failed_pkgs)
-          pending <<- setdiff(pending, failed_pkgs)
-          message(sprintf(
-            "Removing packages that failed to build: %s",
-            paste(failed_pkgs, collapse = ', ')
-          ))
-        }}
-
-        download_failure <- is_download_failure(error_message, err)
-        if (download_failure) {{
-          download_attempts <<- download_attempts + 1
-        }}
-
-        allowed_attempts <- if (download_failure) max_download_attempts else max_attempts
-        current_attempt <- if (download_failure) download_attempts else attempt
-
-        if (length(pending) && current_attempt < allowed_attempts) {{
-          message(sprintf(
-            "pak::pkg_install failed (%d/%d) for %s: %s; retrying...",
-            current_attempt,
-            allowed_attempts,
-            paste(pending, collapse = ', '),
-            error_message
-          ))
-          Sys.sleep(sleep_seconds)
-          return(FALSE)
-        }}
-
-        stop(err)
+        err
       }}
     )
 
-    if (!identical(try_result, TRUE)) {{
+    if (is.null(install_error)) {{
+      build_attempts <- 0
+      download_attempts <- 0
       next
     }}
+
+    error_message <- conditionMessage(install_error)
+    pending <- setdiff(pending, revdep_library_packages())
+
+    context_lines <- collect_error_context(install_error, error_message)
+
+    failed_pkgs <- identify_installation_failures(context_lines)
+    failed_pkgs <- intersect(failed_pkgs, pending)
+    if (length(failed_pkgs)) {{
+      permanent_failures <- union(permanent_failures, failed_pkgs)
+      pending <- setdiff(pending, failed_pkgs)
+      message(sprintf(
+        "Removing packages that failed to build: %s",
+        paste(failed_pkgs, collapse = ', ')
+      ))
+    }}
+
+    download_failure <- is_download_failure(context_lines)
+    if (download_failure) {{
+      download_attempts <- download_attempts + 1
+    }} else {{
+      build_attempts <- build_attempts + 1
+    }}
+
+    if (!length(pending)) {{
+      next
+    }}
+
+    allowed_attempts <- if (download_failure) max_download_attempts else max_attempts
+    current_attempt <- if (download_failure) download_attempts else build_attempts
+
+    if (current_attempt >= allowed_attempts) {{
+      stop(install_error)
+    }}
+
+    message(sprintf(
+      "pak::pkg_install failed (%d/%d) for %s: %s; retrying...",
+      current_attempt,
+      allowed_attempts,
+      paste(pending, collapse = ', '),
+      error_message
+    ))
+    Sys.sleep(sleep_seconds)
+    next
   }}
 
   if (length(permanent_failures)) {{
@@ -854,6 +937,8 @@ mod tests {
         ));
         assert!(script.contains("install.packages(\n      \"pak\""));
         assert!(script.contains("pak::pkg_install("));
+        assert!(script.contains("collect_condition_messages <- function"));
+        assert!(script.contains("collect_error_context <- function"));
         assert!(script.contains("revdep_library_packages <- function"));
         assert!(script.contains("identify_installation_failures <- function"));
         assert!(script.contains("is_download_failure <- function"));
@@ -899,6 +984,8 @@ mod tests {
         assert!(script.contains("ensure_installed(\"rmarkdown\")"));
         assert!(script.contains("install.packages(\n      \"pak\""));
         assert!(script.contains("pak::pkg_install("));
+        assert!(script.contains("collect_condition_messages <- function"));
+        assert!(script.contains("collect_error_context <- function"));
         assert!(script.contains("revdep_library_packages <- function"));
         assert!(script.contains("identify_installation_failures <- function"));
         assert!(script.contains("is_download_failure <- function"));
