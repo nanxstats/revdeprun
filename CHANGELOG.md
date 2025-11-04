@@ -5,7 +5,7 @@
 ### Improvements
 
 - Always install the latest stable Quarto release by resolving the version
-  number from the official download metadata.
+  number from the official download metadata (#106).
 
 ## revdeprun 1.4.1
 
