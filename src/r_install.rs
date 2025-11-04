@@ -98,17 +98,6 @@ fn install_prerequisites(shell: &Shell, progress: &Progress) -> Result<()> {
         ),
     )?;
 
-    // https://github.com/nanxstats/revdeprun/issues/96
-    run_command(
-        progress,
-        "Installing headless display prerequisites",
-        "Headless display prerequisites installed",
-        cmd!(
-            shell,
-            "sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y xvfb xauth x11-apps tk"
-        ),
-    )?;
-
     Ok(())
 }
 
