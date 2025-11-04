@@ -640,7 +640,7 @@ pak_install_retry <- function(pkgs, attempts = 5) {{
       if (grepl("=\\?", pkg, fixed = FALSE)) {{
         pkg
       }} else {{
-        paste0(pkg, "=?ignore-build-errors&ignore-unavailable")
+        paste0(pkg, "?ignore-build-errors&ignore-unavailable")
       }}
     }},
     FUN.VALUE = character(1),
@@ -771,7 +771,7 @@ mod tests {
         assert!(script.contains("pak_install_retry <- function(pkgs, attempts = 5)"));
         assert!(script.contains("pak_install_retry(pkg)"));
         assert!(script.contains("pak_install_retry(install_targets)"));
-        assert!(script.contains("=?ignore-build-errors&ignore-unavailable"));
+        assert!(script.contains("?ignore-build-errors&ignore-unavailable"));
         assert!(script.contains("ensure_pak(source_repo)"));
         assert!(script.contains("parse_description_dependencies <- function"));
         assert!(
@@ -812,7 +812,7 @@ mod tests {
         assert!(script.contains("pak_install_retry <- function(pkgs, attempts = 5)"));
         assert!(script.contains("pak_install_retry(pkg)"));
         assert!(script.contains("ensure_pak(source_repo)"));
-        assert!(script.contains("=?ignore-build-errors&ignore-unavailable"));
+        assert!(script.contains("?ignore-build-errors&ignore-unavailable"));
         assert!(script.contains("revdeprun_compare_check <- function"));
         assert!(script.contains("options("));
         assert!(script.contains("browser = \"false\""));
