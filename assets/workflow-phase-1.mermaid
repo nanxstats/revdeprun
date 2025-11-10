@@ -1,0 +1,21 @@
+flowchart LR
+    Start([Input]) --> Setup[Prepare Workspace<br/>Resolve R Version]
+    Setup --> CheckR{--skip-r-install?}
+
+    CheckR -->|No| InstallR[Install R<br/><i>if not detected</i>]
+    CheckR -->|Yes| InstallDocs
+    InstallR --> InstallDocs[Install Quarto,<br/>pandoc, TinyTeX<br/><i>if not detected</i>]
+    InstallDocs --> PrepRepo{Repository<br/>Type}
+
+    PrepRepo -->|Git URL| Clone[git clone]
+    PrepRepo -->|Local Dir| UseLocal[Use as-is]
+    PrepRepo -->|.tar.gz| Extract[Extract]
+
+    Clone --> Next([To Phase 2])
+    UseLocal --> Next
+    Extract --> Next
+
+    style Start fill:#e1f5ff
+    style Next fill:#e1f5ff
+    style InstallR fill:#fff4e1
+    style InstallDocs fill:#fff4e1
