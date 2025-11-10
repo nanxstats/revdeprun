@@ -173,11 +173,11 @@ The following diagrams illustrate the `revdeprun` workflow.
 
 ### Phase 1: Environment setup
 
-<img src="https://github.com/nanxstats/revdeprun/raw/main/assets/workflow-phase-1.svg" align="right">
+<img src="https://github.com/nanxstats/revdeprun/raw/main/assets/workflow-phase-1.svg">
 
 ### Phase 2: Dependency installation and reverse dependency checking
 
-<img src="https://github.com/nanxstats/revdeprun/raw/main/assets/workflow-phase-2.svg" align="right">
+<img src="https://github.com/nanxstats/revdeprun/raw/main/assets/workflow-phase-2.svg">
 
 ## License
 
