@@ -117,7 +117,7 @@ Options:
           Print version
 ```
 
-## Example workflows
+## Example usages
 
 Standard check on a remote repository:
 
@@ -166,6 +166,18 @@ your computer from sleeping to maintain an uninterrupted connection and
 keep progress output streaming continuously to your terminal.
 On macOS, open a new terminal window and run `caffeinate -d`. On Windows, use
 [PowerToys Awake](https://learn.microsoft.com/en-us/windows/powertoys/awake).
+
+## Technical workflow
+
+The following diagrams illustrate the `revdeprun` workflow.
+
+### Phase 1: Environment setup
+
+<img src="https://github.com/nanxstats/revdeprun/raw/main/assets/workflow-phase-1.svg">
+
+### Phase 2: Dependency installation and reverse dependency checking
+
+<img src="https://github.com/nanxstats/revdeprun/raw/main/assets/workflow-phase-2.svg">
 
 ## License
 

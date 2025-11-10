@@ -1,0 +1,20 @@
+flowchart LR
+    Start([From Phase 1]) --> ResolveSys[Resolve System<br/>Requirements]
+    ResolveSys --> InstallSys[Install apt<br/>Packages]
+    InstallSys --> PreInstall[Pre-install Binaries<br/>into revdep/library/]
+    PreInstall --> RunCheck[xfun::rev_check#40;#41;<br/>Parallel Checks]
+
+    RunCheck --> Output1[revdep/library/]
+    RunCheck --> Output2[00check_diffs.md<br/>00check_diffs.html]
+    RunCheck --> Output3[\*.Rcheck/<br/>\*.Rcheck2//]
+
+    Output1 --> End([Complete])
+    Output2 --> End
+    Output3 --> End
+
+    style Start fill:#e1f5ff
+    style End fill:#e1f5ff
+    style RunCheck fill:#fff4e1
+    style Output1 fill:#e8f5e9
+    style Output2 fill:#e8f5e9
+    style Output3 fill:#e8f5e9
