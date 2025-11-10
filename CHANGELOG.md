@@ -1,5 +1,16 @@
 # Changelog
 
+## revdeprun 1.4.3
+
+### Documentation
+
+- Add workflow diagrams to `README.md` visualizing the two-phase workflow:
+  Phase 1 (environment setup) and Phase 2 (dependency installation and
+  reverse dependency checking) (#112).
+- Add tips to `README.md` on preventing system sleep during long-running
+  checks to maintain SSH connections and continuous terminal output,
+  with platform-specific instructions for macOS and Windows (#109, #110).
+
 ## revdeprun 1.4.2
 
 ### Improvements
