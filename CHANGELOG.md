@@ -1,5 +1,13 @@
 # Changelog
 
+## revdeprun 1.4.4
+
+### Documentation
+
+- Improve workflow diagrams with pastel color palette to improve visual
+  hierarchy and readability, using consistent semantic color mapping across
+  both phases (#115).
+
 ## revdeprun 1.4.3
 
 ### Documentation
