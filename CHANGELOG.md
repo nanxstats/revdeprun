@@ -1,5 +1,12 @@
 # Changelog
 
+## revdeprun 1.4.5
+
+### Maintenance
+
+- Removed the temporary workaround for `xfun::compare_Rcheck()` as xfun 0.55
+  is now available on CRAN and includes the fix (#118).
+
 ## revdeprun 1.4.4
 
 ### Documentation
