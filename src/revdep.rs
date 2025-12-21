@@ -14,6 +14,10 @@ use crate::{
     workspace::{self, Workspace},
 };
 
+const PKGDEPENDS_PATCH_FILENAME: &str = "patch-pkgdepends.R";
+const PKGDEPENDS_PATCH: &str =
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/patch-pkgdepends.R"));
+
 /// Ensures a checkout of the target repository exists within the configured
 /// workspace clone root.
 ///
@@ -297,8 +301,10 @@ pub fn run_revcheck(
     let max_connections = util::optimal_max_connections(num_workers);
     let codename = detect_ubuntu_codename().context("failed to detect Ubuntu release codename")?;
 
-    let install_contents = build_revdep_install_script(repo_path, num_workers, &codename)?;
-    let run_contents = build_revdep_run_script(repo_path, num_workers)?;
+    let patch_path = write_pkgdepends_patch(workspace)?;
+    let install_contents =
+        build_revdep_install_script(repo_path, num_workers, &codename, &patch_path)?;
+    let run_contents = build_revdep_run_script(repo_path, num_workers, &patch_path)?;
 
     let mut install_script = NamedTempFile::new_in(workspace.temp_dir())
         .context("failed to create temporary R script file")?;
@@ -365,8 +371,9 @@ fn build_revdep_install_script(
     repo_path: &Path,
     num_workers: usize,
     codename: &str,
+    patch_path: &Path,
 ) -> Result<String> {
-    let prelude = script_prelude(repo_path, num_workers);
+    let prelude = script_prelude(repo_path, num_workers, patch_path);
     let codename_literal = util::r_string_literal(&codename.to_lowercase());
 
     let script = format!(
@@ -386,6 +393,10 @@ Sys.setenv(NOT_CRAN = "true")
 
 # Ensure pak is available ----
 ensure_pak(source_repo)
+
+# Apply pkgdepends speed patch ----
+source(pkgdepends_patch_path)
+pak_patch_parallel_install(pkgdepends_patch_path)
 
 # Ensure tooling prerequisites ----
 ensure_installed("xfun")
@@ -491,8 +502,12 @@ if (length(install_targets) > 0) {{
     Ok(script)
 }
 
-fn build_revdep_run_script(repo_path: &Path, num_workers: usize) -> Result<String> {
-    let prelude = script_prelude(repo_path, num_workers);
+fn build_revdep_run_script(
+    repo_path: &Path,
+    num_workers: usize,
+    patch_path: &Path,
+) -> Result<String> {
+    let prelude = script_prelude(repo_path, num_workers, patch_path);
 
     let script = format!(
         r#"{prelude}
@@ -511,6 +526,10 @@ Sys.setenv(NOT_CRAN = "true")
 
 # Ensure pak is available ----
 ensure_pak(source_repo)
+
+# Apply pkgdepends parallel patch ----
+source(pkgdepends_patch_path)
+pak_patch_parallel_install(pkgdepends_patch_path)
 
 # Ensure runtime prerequisites ----
 ensure_installed("xfun")
@@ -543,8 +562,9 @@ invisible(results)
     Ok(script)
 }
 
-fn script_prelude(repo_path: &Path, num_workers: usize) -> String {
+fn script_prelude(repo_path: &Path, num_workers: usize, patch_path: &Path) -> String {
     let path_literal = util::r_string_literal(&repo_path.to_string_lossy());
+    let patch_literal = util::r_string_literal(&patch_path.to_string_lossy());
     let workers = num_workers.max(1);
 
     format!(
@@ -567,6 +587,10 @@ Sys.setenv(R_LIBS_USER = library_dir)
 # Configure parallelism ----
 install_workers <- {workers}
 options(Ncpus = install_workers)
+
+# Configure pkgdepends patch ----
+pkgdepends_patch_path <- {patch_literal}
+pkgdepends_patch_path <- normalizePath(pkgdepends_patch_path, winslash = "/", mustWork = TRUE)
 
 # Helpers for package installation ----
 pak_install_retry <- function(pkgs, attempts = 5) {{
@@ -642,6 +666,22 @@ ensure_installed <- function(pkg) {{
     )
 }
 
+fn write_pkgdepends_patch(workspace: &Workspace) -> Result<PathBuf> {
+    let patch_path = workspace.temp_dir().join(PKGDEPENDS_PATCH_FILENAME);
+    fs::write(&patch_path, PKGDEPENDS_PATCH).with_context(|| {
+        format!(
+            "failed to write pkgdepends patch to {}",
+            patch_path.display()
+        )
+    })?;
+    workspace::canonicalized(&patch_path).with_context(|| {
+        format!(
+            "failed to resolve pkgdepends patch path {}",
+            patch_path.display()
+        )
+    })
+}
+
 fn detect_ubuntu_codename() -> Result<String> {
     if let Ok(value) = env::var("REVDEPRUN_UBUNTU_CODENAME") {
         let trimmed = value.trim();
@@ -702,7 +742,9 @@ mod tests {
     #[test]
     fn build_install_script_uses_binary_repo() {
         let path = Path::new("/tmp/example");
-        let script = build_revdep_install_script(path, 8, "noble").expect("script must build");
+        let patch_path = Path::new("/tmp/patch-pkgdepends.R");
+        let script = build_revdep_install_script(path, 8, "noble", patch_path)
+            .expect("script must build");
         assert!(script.contains("https://packagemanager.posit.co/cran/__linux__/%s/latest"));
         assert!(script.contains(
             "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", 'noble')"
@@ -715,6 +757,9 @@ mod tests {
         assert!(script.contains("pak_install_retry(install_targets)"));
         assert!(script.contains("?ignore-build-errors&ignore-unavailable"));
         assert!(script.contains("ensure_pak(source_repo)"));
+        assert!(script.contains("pkgdepends_patch_path <- '/tmp/patch-pkgdepends.R'"));
+        assert!(script.contains("source(pkgdepends_patch_path)"));
+        assert!(script.contains("pak_patch_parallel_install(pkgdepends_patch_path)"));
         assert!(script.contains("parse_description_dependencies <- function"));
         assert!(
             script.contains("dev_package_deps <- parse_description_dependencies(\"DESCRIPTION\"")
@@ -741,7 +786,9 @@ mod tests {
     #[test]
     fn build_run_script_invokes_xfun() {
         let path = Path::new("/tmp/example");
-        let script = build_revdep_run_script(path, 8).expect("script must build");
+        let patch_path = Path::new("/tmp/patch-pkgdepends.R");
+        let script =
+            build_revdep_run_script(path, 8, patch_path).expect("script must build");
 
         assert!(script.contains("xfun::rev_check"));
         assert!(script.contains("src = \".\""));
@@ -754,6 +801,9 @@ mod tests {
         assert!(script.contains("pak_install_retry <- function(pkgs, attempts = 5)"));
         assert!(script.contains("pak_install_retry(pkg)"));
         assert!(script.contains("ensure_pak(source_repo)"));
+        assert!(script.contains("pkgdepends_patch_path <- '/tmp/patch-pkgdepends.R'"));
+        assert!(script.contains("source(pkgdepends_patch_path)"));
+        assert!(script.contains("pak_patch_parallel_install(pkgdepends_patch_path)"));
         assert!(script.contains("?ignore-build-errors&ignore-unavailable"));
         assert!(script.contains("options("));
         assert!(script.contains("browser = \"false\""));

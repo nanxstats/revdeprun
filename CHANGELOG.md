@@ -1,5 +1,15 @@
 # Changelog
 
+## revdeprun 2.0.0
+
+### Improvements
+
+- Apply monkey patch for pkgdepends embedded in pak, to refill the worker pool
+  up to the number of workers after each poll and update `deps_left` only for
+  packages that still need it.
+  This change substantially accelerates `pak::pkg_install()` when installing
+  large dependency sets for revdep checks (#121).
+
 ## revdeprun 1.4.5
 
 ### Maintenance
