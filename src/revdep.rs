@@ -394,7 +394,7 @@ Sys.setenv(NOT_CRAN = "true")
 # Ensure pak is available ----
 ensure_pak(source_repo)
 
-# Apply pkgdepends speed patch ----
+# Apply pkgdepends parallel patch ----
 source(pkgdepends_patch_path)
 pak_patch_parallel_install(pkgdepends_patch_path)
 
