@@ -15,8 +15,10 @@ use crate::{
 };
 
 const PKGDEPENDS_PATCH_FILENAME: &str = "patch-pkgdepends.R";
-const PKGDEPENDS_PATCH: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/patch-pkgdepends.R"));
+const PKGDEPENDS_PATCH: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/patch-pkgdepends.R"
+));
 
 /// Ensures a checkout of the target repository exists within the configured
 /// workspace clone root.
@@ -743,8 +745,8 @@ mod tests {
     fn build_install_script_uses_binary_repo() {
         let path = Path::new("/tmp/example");
         let patch_path = Path::new("/tmp/patch-pkgdepends.R");
-        let script = build_revdep_install_script(path, 8, "noble", patch_path)
-            .expect("script must build");
+        let script =
+            build_revdep_install_script(path, 8, "noble", patch_path).expect("script must build");
         assert!(script.contains("https://packagemanager.posit.co/cran/__linux__/%s/latest"));
         assert!(script.contains(
             "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", 'noble')"
@@ -787,8 +789,7 @@ mod tests {
     fn build_run_script_invokes_xfun() {
         let path = Path::new("/tmp/example");
         let patch_path = Path::new("/tmp/patch-pkgdepends.R");
-        let script =
-            build_revdep_run_script(path, 8, patch_path).expect("script must build");
+        let script = build_revdep_run_script(path, 8, patch_path).expect("script must build");
 
         assert!(script.contains("xfun::rev_check"));
         assert!(script.contains("src = \".\""));
