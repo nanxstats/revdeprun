@@ -556,7 +556,7 @@ if (!nzchar(package_name)) {{
 }}
 
 # Run xfun::rev_check() ----
-results <- xfun::rev_check(package_name, src = ".")
+results <- xfun::rev_check(package_name, src = ".", update = FALSE)
 invisible(results)
 "#
     );
