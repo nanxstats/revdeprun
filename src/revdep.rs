@@ -19,6 +19,8 @@ const PKGDEPENDS_PATCH: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/assets/patch-pkgdepends.R"
 ));
+const XFUN_PATCH_FILENAME: &str = "patch-xfun.R";
+const XFUN_PATCH: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/patch-xfun.R"));
 const REVDEP_RBUILDIGNORE_LINE: &str = "^revdep$";
 
 /// Ensures a checkout of the target repository exists within the configured
@@ -350,10 +352,21 @@ pub fn run_revcheck(
     let max_connections = util::optimal_max_connections(num_workers);
     let codename = detect_ubuntu_codename().context("failed to detect Ubuntu release codename")?;
 
-    let patch_path = write_pkgdepends_patch(workspace)?;
-    let install_contents =
-        build_revdep_install_script(repo_path, num_workers, &codename, &patch_path)?;
-    let run_contents = build_revdep_run_script(repo_path, num_workers, &patch_path)?;
+    let pkgdepends_patch_path = write_pkgdepends_patch(workspace)?;
+    let xfun_patch_path = write_xfun_patch(workspace)?;
+    let install_contents = build_revdep_install_script(
+        repo_path,
+        num_workers,
+        &codename,
+        &pkgdepends_patch_path,
+        &xfun_patch_path,
+    )?;
+    let run_contents = build_revdep_run_script(
+        repo_path,
+        num_workers,
+        &pkgdepends_patch_path,
+        &xfun_patch_path,
+    )?;
 
     let mut install_script = NamedTempFile::new_in(workspace.temp_dir())
         .context("failed to create temporary R script file")?;
@@ -420,9 +433,15 @@ fn build_revdep_install_script(
     repo_path: &Path,
     num_workers: usize,
     codename: &str,
-    patch_path: &Path,
+    pkgdepends_patch_path: &Path,
+    xfun_patch_path: &Path,
 ) -> Result<String> {
-    let prelude = script_prelude(repo_path, num_workers, patch_path);
+    let prelude = script_prelude(
+        repo_path,
+        num_workers,
+        pkgdepends_patch_path,
+        xfun_patch_path,
+    );
     let codename_literal = util::r_string_literal(&codename.to_lowercase());
 
     let script = format!(
@@ -554,9 +573,15 @@ if (length(install_targets) > 0) {{
 fn build_revdep_run_script(
     repo_path: &Path,
     num_workers: usize,
-    patch_path: &Path,
+    pkgdepends_patch_path: &Path,
+    xfun_patch_path: &Path,
 ) -> Result<String> {
-    let prelude = script_prelude(repo_path, num_workers, patch_path);
+    let prelude = script_prelude(
+        repo_path,
+        num_workers,
+        pkgdepends_patch_path,
+        xfun_patch_path,
+    );
 
     let script = format!(
         r#"{prelude}
@@ -585,11 +610,16 @@ ensure_installed("xfun")
 ensure_installed("markdown")
 ensure_installed("rmarkdown")
 
+# Apply xfun parallel download patch ----
+source(xfun_patch_path)
+xfun_patch_parallel_download()
+
 # Configure xfun::rev_check() options ----
 options(
   browser = "false",
   install.packages.compile.from.source = "always",
   xfun.rev_check.compare = TRUE,
+  xfun.rev_check.download_cores = 5,
   xfun.rev_check.timeout = 30 * 60,
   xfun.rev_check.summary = TRUE,
   xfun.rev_check.sample = Inf,
@@ -611,9 +641,15 @@ invisible(results)
     Ok(script)
 }
 
-fn script_prelude(repo_path: &Path, num_workers: usize, patch_path: &Path) -> String {
+fn script_prelude(
+    repo_path: &Path,
+    num_workers: usize,
+    pkgdepends_patch_path: &Path,
+    xfun_patch_path: &Path,
+) -> String {
     let path_literal = util::r_string_literal(&repo_path.to_string_lossy());
-    let patch_literal = util::r_string_literal(&patch_path.to_string_lossy());
+    let pkgdepends_patch_literal = util::r_string_literal(&pkgdepends_patch_path.to_string_lossy());
+    let xfun_patch_literal = util::r_string_literal(&xfun_patch_path.to_string_lossy());
     let workers = num_workers.max(1);
 
     format!(
@@ -638,8 +674,12 @@ install_workers <- {workers}
 options(Ncpus = install_workers)
 
 # Configure pkgdepends patch ----
-pkgdepends_patch_path <- {patch_literal}
+pkgdepends_patch_path <- {pkgdepends_patch_literal}
 pkgdepends_patch_path <- normalizePath(pkgdepends_patch_path, winslash = "/", mustWork = TRUE)
+
+# Configure xfun patch ----
+xfun_patch_path <- {xfun_patch_literal}
+xfun_patch_path <- normalizePath(xfun_patch_path, winslash = "/", mustWork = TRUE)
 
 # Helpers for package installation ----
 pak_install_retry <- function(pkgs, attempts = 5) {{
@@ -731,6 +771,14 @@ fn write_pkgdepends_patch(workspace: &Workspace) -> Result<PathBuf> {
     })
 }
 
+fn write_xfun_patch(workspace: &Workspace) -> Result<PathBuf> {
+    let patch_path = workspace.temp_dir().join(XFUN_PATCH_FILENAME);
+    fs::write(&patch_path, XFUN_PATCH)
+        .with_context(|| format!("failed to write xfun patch to {}", patch_path.display()))?;
+    workspace::canonicalized(&patch_path)
+        .with_context(|| format!("failed to resolve xfun patch path {}", patch_path.display()))
+}
+
 fn detect_ubuntu_codename() -> Result<String> {
     if let Ok(value) = env::var("REVDEPRUN_UBUNTU_CODENAME") {
         let trimmed = value.trim();
@@ -791,9 +839,11 @@ mod tests {
     #[test]
     fn build_install_script_uses_binary_repo() {
         let path = Path::new("/tmp/example");
-        let patch_path = Path::new("/tmp/patch-pkgdepends.R");
+        let pkgdepends_patch_path = Path::new("/tmp/patch-pkgdepends.R");
+        let xfun_patch_path = Path::new("/tmp/patch-xfun.R");
         let script =
-            build_revdep_install_script(path, 8, "noble", patch_path).expect("script must build");
+            build_revdep_install_script(path, 8, "noble", pkgdepends_patch_path, xfun_patch_path)
+                .expect("script must build");
         assert!(script.contains("https://packagemanager.posit.co/cran/__linux__/%s/latest"));
         assert!(script.contains(
             "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", 'noble')"
@@ -807,6 +857,7 @@ mod tests {
         assert!(script.contains("?ignore-build-errors&ignore-unavailable"));
         assert!(script.contains("ensure_pak(source_repo)"));
         assert!(script.contains("pkgdepends_patch_path <- '/tmp/patch-pkgdepends.R'"));
+        assert!(script.contains("xfun_patch_path <- '/tmp/patch-xfun.R'"));
         assert!(script.contains("source(pkgdepends_patch_path)"));
         assert!(script.contains("pak_patch_parallel_install(pkgdepends_patch_path)"));
         assert!(script.contains("parse_description_dependencies <- function"));
@@ -835,8 +886,10 @@ mod tests {
     #[test]
     fn build_run_script_invokes_xfun() {
         let path = Path::new("/tmp/example");
-        let patch_path = Path::new("/tmp/patch-pkgdepends.R");
-        let script = build_revdep_run_script(path, 8, patch_path).expect("script must build");
+        let pkgdepends_patch_path = Path::new("/tmp/patch-pkgdepends.R");
+        let xfun_patch_path = Path::new("/tmp/patch-xfun.R");
+        let script = build_revdep_run_script(path, 8, pkgdepends_patch_path, xfun_patch_path)
+            .expect("script must build");
 
         assert!(script.contains("xfun::rev_check"));
         assert!(script.contains("src = \".\""));
@@ -850,13 +903,17 @@ mod tests {
         assert!(script.contains("pak_install_retry(pkg)"));
         assert!(script.contains("ensure_pak(source_repo)"));
         assert!(script.contains("pkgdepends_patch_path <- '/tmp/patch-pkgdepends.R'"));
+        assert!(script.contains("xfun_patch_path <- '/tmp/patch-xfun.R'"));
         assert!(script.contains("source(pkgdepends_patch_path)"));
         assert!(script.contains("pak_patch_parallel_install(pkgdepends_patch_path)"));
+        assert!(script.contains("source(xfun_patch_path)"));
+        assert!(script.contains("xfun_patch_parallel_download()"));
         assert!(script.contains("?ignore-build-errors&ignore-unavailable"));
         assert!(script.contains("options("));
         assert!(script.contains("browser = \"false\""));
         assert!(script.contains("install.packages.compile.from.source = \"always\""));
         assert!(script.contains("xfun.rev_check.compare = TRUE"));
+        assert!(script.contains("xfun.rev_check.download_cores = 5"));
         assert!(script.contains("xfun.rev_check.timeout = 30 * 60"));
         assert!(script.contains("xfun.rev_check.summary = TRUE"));
         assert!(script.contains("xfun.rev_check.sample = Inf"));
@@ -916,8 +973,7 @@ UBUNTU_CODENAME=noble
     fn ensures_revdep_ignored_adds_newline() {
         let tmp = tempdir().expect("tempdir");
         let repo_path = tmp.path();
-        fs::write(repo_path.join(".Rbuildignore"), "^README\\.Rmd$")
-            .expect("write ignore file");
+        fs::write(repo_path.join(".Rbuildignore"), "^README\\.Rmd$").expect("write ignore file");
 
         ensure_revdep_ignored(repo_path).expect("ignore rule");
 
