@@ -7,7 +7,13 @@
 - revdeprun now makes sure to exclude the `revdep/` directory from package
   builds by appending `^revdep$` to `.Rbuildignore`. Without this, the
   `xfun::rev_check()` step could be slowed down dramatically when a
-  large number of dependencies for revdep checks are installed (#122).
+  large number of dependencies for revdep checks are installed (#125).
+
+### Improvements
+
+- Apply an xfun monkey patch to parallelize `xfun:::download_tarballs()`.
+  Set the number of threads to 5 to speed up revdep tarball downloads
+  during `xfun::rev_check()` (#127).
 
 ## revdeprun 2.0.0
 
