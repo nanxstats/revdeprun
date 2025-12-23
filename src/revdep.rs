@@ -913,6 +913,20 @@ UBUNTU_CODENAME=noble
     }
 
     #[test]
+    fn ensures_revdep_ignored_adds_newline() {
+        let tmp = tempdir().expect("tempdir");
+        let repo_path = tmp.path();
+        fs::write(repo_path.join(".Rbuildignore"), "^README\\.Rmd$")
+            .expect("write ignore file");
+
+        ensure_revdep_ignored(repo_path).expect("ignore rule");
+
+        let contents =
+            fs::read_to_string(repo_path.join(".Rbuildignore")).expect("ignore contents");
+        assert_eq!(contents, "^README\\.Rmd$\n^revdep$\n");
+    }
+
+    #[test]
     fn prepares_repository_from_tarball() {
         let shell = Shell::new().expect("shell");
         let tmp = tempdir().expect("tempdir");
