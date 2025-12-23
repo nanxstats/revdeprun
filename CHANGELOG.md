@@ -12,8 +12,8 @@
 ### Improvements
 
 - Apply an xfun monkey patch to parallelize `xfun:::download_tarball()`.
-  The number of workers is set to 5 to speed up revdep tarball downloads
-  during `xfun::rev_check()` (#127).
+  The number of parallel download workers is set to 5 to accelerate
+  revdep tarball downloads during `xfun::rev_check()` (#127).
 
 ## revdeprun 2.0.0
 
