@@ -11,7 +11,7 @@
 
 ### Improvements
 
-- Apply an xfun monkey patch to parallelize `xfun:::download_tarballs()`.
+- Apply an xfun monkey patch to parallelize `xfun:::download_tarball()`.
   Set the number of workers to 5 to speed up revdep tarball downloads
   during `xfun::rev_check()` (#127).
 

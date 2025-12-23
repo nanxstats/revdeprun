@@ -1,7 +1,7 @@
 # Monkey patches for the {xfun} download helper.
 #
 # Motivation:
-# - xfun:::download_tarballs() downloads tarballs serially, which slows down
+# - xfun:::download_tarball() downloads tarballs serially, which slows down
 #   revdep runs with large reverse dependency sets. This patch parallelizes
 #   the download loop using forked workers.
 
@@ -13,10 +13,10 @@ xfun_patch_parallel_download <- function() {
   ns <- asNamespace("xfun")
 
   old <- list(
-    download_tarballs = get("download_tarballs", envir = ns)
+    download_tarball = get("download_tarball", envir = ns)
   )
 
-  patched_download_tarballs <- function(
+  patched_download_tarball <- function(
     pkgs,
     db = available.packages(type = "source"),
     dir = ".",
@@ -50,9 +50,9 @@ xfun_patch_parallel_download <- function() {
     z
   }
 
-  environment(patched_download_tarballs) <- ns
+  environment(patched_download_tarball) <- ns
 
-  assignInNamespace("download_tarballs", patched_download_tarballs, ns = "xfun")
+  assignInNamespace("download_tarball", patched_download_tarball, ns = "xfun")
 
   class(old) <- c("xfun_parallel_download_patch", class(old))
   old
@@ -62,6 +62,6 @@ xfun_unpatch_parallel_download <- function(patch) {
   if (!inherits(patch, "xfun_parallel_download_patch")) {
     stop("Not an xfun patch object.", call. = FALSE)
   }
-  assignInNamespace("download_tarballs", patch$download_tarballs, ns = "xfun")
+  assignInNamespace("download_tarball", patch$download_tarball, ns = "xfun")
   invisible(TRUE)
 }
