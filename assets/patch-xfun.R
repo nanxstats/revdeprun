@@ -55,7 +55,7 @@ xfun_patch_parallel_download <- function() {
   assignInNamespace("download_tarball", patched_download_tarball, ns = "xfun")
 
   class(old) <- c("xfun_parallel_download_patch", class(old))
-  old
+  invisible(old)
 }
 
 xfun_unpatch_parallel_download <- function(patch) {
