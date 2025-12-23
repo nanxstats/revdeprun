@@ -1,5 +1,14 @@
 # Changelog
 
+## revdeprun 2.1.0
+
+### Improvements
+
+- Use `update = FALSE` in `xfun::rev_check()` by default to avoid intermittent,
+  long-running single-threaded `old.packages(checkBuilt = TRUE)` scans on
+  large preinstalled libraries. This keeps revdep runs fast, at the cost of
+  tolerating some possibly outdated dependencies (#124).
+
 ## revdeprun 2.0.0
 
 ### Improvements
