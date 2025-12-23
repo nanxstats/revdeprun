@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Bug fixes
+
+- revdeprun now makes sure to exclude the `revdep/` directory from package
+  builds by appending `^revdep$` to `.Rbuildignore`. Without this, the
+  `xfun::rev_check()` step could be slowed down dramatically when a
+  large number of dependencies for revdep checks are installed (#122).
+
 ## revdeprun 2.0.0
 
 ### Improvements

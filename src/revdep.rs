@@ -19,6 +19,7 @@ const PKGDEPENDS_PATCH: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/assets/patch-pkgdepends.R"
 ));
+const REVDEP_RBUILDIGNORE_LINE: &str = "^revdep$";
 
 /// Ensures a checkout of the target repository exists within the configured
 /// workspace clone root.
@@ -31,11 +32,11 @@ pub fn prepare_repository(
     progress: &Progress,
 ) -> Result<PathBuf> {
     let candidate = Path::new(spec);
-    if candidate.exists() {
+    let repo_path = if candidate.exists() {
         if candidate.is_dir() {
-            return prepare_local_directory(candidate, progress);
+            prepare_local_directory(candidate, progress)?
         } else if candidate.is_file() && is_tarball(candidate) {
-            return prepare_tarball(shell, workspace, candidate, progress);
+            prepare_tarball(shell, workspace, candidate, progress)?
         } else if candidate.is_file() {
             bail!(
                 "unsupported local package input {}; expected a directory or .tar.gz archive",
@@ -47,52 +48,60 @@ pub fn prepare_repository(
                 candidate.display()
             );
         }
-    }
+    } else {
+        fs::create_dir_all(workspace.clone_root()).with_context(|| {
+            format!(
+                "failed to create clone root directory {}",
+                workspace.clone_root().display()
+            )
+        })?;
 
-    fs::create_dir_all(workspace.clone_root()).with_context(|| {
+        let repo_name = util::guess_repo_name(spec)
+            .ok_or_else(|| anyhow!("unable to infer repository name from {spec}"))?;
+        let destination = workspace.clone_root().join(repo_name);
+        if destination.exists() {
+            anyhow::bail!(
+                "refusing to clone into {} because the directory already exists",
+                destination.display()
+            );
+        }
+
+        let clone_task = progress.task(format!("Cloning {spec} into {}", destination.display()));
+        let output = cmd!(shell, "git clone --depth 1 {spec} {destination}")
+            .quiet()
+            .ignore_status()
+            .output();
+
+        match output {
+            Ok(output) if output.status.success() => {
+                clone_task.finish_with_message(format!("Cloned into {}", destination.display()));
+            }
+            Ok(output) => {
+                clone_task.fail(format!("Cloning {spec} failed"));
+                util::emit_command_output(
+                    progress,
+                    &format!("git clone {spec}"),
+                    &output.stdout,
+                    &output.stderr,
+                );
+                bail!("failed to clone repository {spec}");
+            }
+            Err(err) => {
+                clone_task.fail(format!("Cloning {spec} failed to start"));
+                return Err(err).with_context(|| format!("failed to clone repository {spec}"));
+            }
+        }
+
+        workspace::canonicalized(&destination)?
+    };
+
+    ensure_revdep_ignored(&repo_path).with_context(|| {
         format!(
-            "failed to create clone root directory {}",
-            workspace.clone_root().display()
+            "failed to update {}",
+            repo_path.join(".Rbuildignore").display()
         )
     })?;
-
-    let repo_name = util::guess_repo_name(spec)
-        .ok_or_else(|| anyhow!("unable to infer repository name from {spec}"))?;
-    let destination = workspace.clone_root().join(repo_name);
-    if destination.exists() {
-        anyhow::bail!(
-            "refusing to clone into {} because the directory already exists",
-            destination.display()
-        );
-    }
-
-    let clone_task = progress.task(format!("Cloning {spec} into {}", destination.display()));
-    let output = cmd!(shell, "git clone --depth 1 {spec} {destination}")
-        .quiet()
-        .ignore_status()
-        .output();
-
-    match output {
-        Ok(output) if output.status.success() => {
-            clone_task.finish_with_message(format!("Cloned into {}", destination.display()));
-        }
-        Ok(output) => {
-            clone_task.fail(format!("Cloning {spec} failed"));
-            util::emit_command_output(
-                progress,
-                &format!("git clone {spec}"),
-                &output.stdout,
-                &output.stderr,
-            );
-            bail!("failed to clone repository {spec}");
-        }
-        Err(err) => {
-            clone_task.fail(format!("Cloning {spec} failed to start"));
-            return Err(err).with_context(|| format!("failed to clone repository {spec}"));
-        }
-    }
-
-    workspace::canonicalized(&destination)
+    Ok(repo_path)
 }
 
 fn prepare_local_directory(candidate: &Path, progress: &Progress) -> Result<PathBuf> {
@@ -226,6 +235,44 @@ fn prepare_tarball(
 
     task.finish_with_message(format!("Using {}", canonical_dir.display()));
     Ok(canonical_dir)
+}
+
+fn ensure_revdep_ignored(repo_path: &Path) -> Result<()> {
+    let ignore_path = repo_path.join(".Rbuildignore");
+    if ignore_path.exists() {
+        let contents = fs::read_to_string(&ignore_path).with_context(|| {
+            format!("failed to read .Rbuildignore at {}", ignore_path.display())
+        })?;
+        if contents
+            .lines()
+            .any(|line| line.trim() == REVDEP_RBUILDIGNORE_LINE)
+        {
+            return Ok(());
+        }
+        let mut file = fs::OpenOptions::new()
+            .append(true)
+            .open(&ignore_path)
+            .with_context(|| {
+                format!(
+                    "failed to open .Rbuildignore for append at {}",
+                    ignore_path.display()
+                )
+            })?;
+        if !contents.is_empty() && !contents.ends_with('\n') {
+            file.write_all(b"\n")
+                .context("failed to write newline to .Rbuildignore")?;
+        }
+        writeln!(file, "{REVDEP_RBUILDIGNORE_LINE}")
+            .context("failed to append revdep ignore rule")?;
+    } else {
+        fs::write(&ignore_path, format!("{REVDEP_RBUILDIGNORE_LINE}\n")).with_context(|| {
+            format!(
+                "failed to create .Rbuildignore at {}",
+                ignore_path.display()
+            )
+        })?;
+    }
+    Ok(())
 }
 
 fn locate_package_root(extraction_root: &Path, tarball: &Path) -> Result<PathBuf> {
@@ -844,6 +891,28 @@ UBUNTU_CODENAME=noble
     }
 
     #[test]
+    fn ensures_revdep_is_ignored() {
+        let tmp = tempdir().expect("tempdir");
+        let repo_path = tmp.path();
+        ensure_revdep_ignored(repo_path).expect("ignore rule");
+        let contents =
+            fs::read_to_string(repo_path.join(".Rbuildignore")).expect("ignore contents");
+        assert!(
+            contents
+                .lines()
+                .any(|line| line.trim() == REVDEP_RBUILDIGNORE_LINE)
+        );
+
+        ensure_revdep_ignored(repo_path).expect("ignore rule");
+        let updated = fs::read_to_string(repo_path.join(".Rbuildignore")).expect("ignore contents");
+        let matches = updated
+            .lines()
+            .filter(|line| line.trim() == REVDEP_RBUILDIGNORE_LINE)
+            .count();
+        assert_eq!(matches, 1);
+    }
+
+    #[test]
     fn prepares_repository_from_tarball() {
         let shell = Shell::new().expect("shell");
         let tmp = tempdir().expect("tempdir");
@@ -885,6 +954,14 @@ UBUNTU_CODENAME=noble
         .expect("prepared repository");
 
         assert!(repo_path.join("DESCRIPTION").exists());
+        let ignore_path = repo_path.join(".Rbuildignore");
+        assert!(ignore_path.is_file());
+        let ignore_contents = fs::read_to_string(&ignore_path).expect("ignore contents");
+        assert!(
+            ignore_contents
+                .lines()
+                .any(|line| line.trim() == REVDEP_RBUILDIGNORE_LINE)
+        );
         let expected = workspace::canonicalized(&workspace_root.join("mypkg"))
             .expect("canonical expected path");
         assert_eq!(repo_path, expected);
