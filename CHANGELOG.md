@@ -1,5 +1,12 @@
 # Changelog
 
+## revdeprun 2.1.1
+
+### Improvements
+
+- Increase parallel download workers for revdep source tarballs from 5 to 6 to
+  match pak and pkgcache defaults (#132).
+
 ## revdeprun 2.1.0
 
 ### Bug fixes
