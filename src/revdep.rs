@@ -619,7 +619,7 @@ options(
   browser = "false",
   install.packages.compile.from.source = "always",
   xfun.rev_check.compare = TRUE,
-  xfun.rev_check.download_cores = 5,
+  xfun.rev_check.download_cores = 6,
   xfun.rev_check.timeout = 30 * 60,
   xfun.rev_check.summary = TRUE,
   xfun.rev_check.sample = Inf,
@@ -913,7 +913,7 @@ mod tests {
         assert!(script.contains("browser = \"false\""));
         assert!(script.contains("install.packages.compile.from.source = \"always\""));
         assert!(script.contains("xfun.rev_check.compare = TRUE"));
-        assert!(script.contains("xfun.rev_check.download_cores = 5"));
+        assert!(script.contains("xfun.rev_check.download_cores = 6"));
         assert!(script.contains("xfun.rev_check.timeout = 30 * 60"));
         assert!(script.contains("xfun.rev_check.summary = TRUE"));
         assert!(script.contains("xfun.rev_check.sample = Inf"));
