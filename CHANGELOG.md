@@ -1,5 +1,13 @@
 # Changelog
 
+## revdeprun 2.1.2
+
+### Improvements
+
+- Increase parallel download workers for revdep source tarballs from 6 to 50,
+  to align with uv's `concurrent-downloads` default and speed up downloads
+  when checking packages with thousands of reverse dependencies (#135).
+
 ## revdeprun 2.1.1
 
 ### Improvements
