@@ -357,6 +357,7 @@ pub fn run_revcheck(
     let install_contents = build_revdep_install_script(
         repo_path,
         num_workers,
+        max_connections,
         &codename,
         &pkgdepends_patch_path,
         &xfun_patch_path,
@@ -364,6 +365,7 @@ pub fn run_revcheck(
     let run_contents = build_revdep_run_script(
         repo_path,
         num_workers,
+        max_connections,
         &pkgdepends_patch_path,
         &xfun_patch_path,
     )?;
@@ -432,6 +434,7 @@ pub fn revlib_dir(repo_path: &Path) -> PathBuf {
 fn build_revdep_install_script(
     repo_path: &Path,
     num_workers: usize,
+    max_connections: usize,
     codename: &str,
     pkgdepends_patch_path: &Path,
     xfun_patch_path: &Path,
@@ -439,6 +442,7 @@ fn build_revdep_install_script(
     let prelude = script_prelude(
         repo_path,
         num_workers,
+        max_connections,
         pkgdepends_patch_path,
         xfun_patch_path,
     );
@@ -573,12 +577,14 @@ if (length(install_targets) > 0) {{
 fn build_revdep_run_script(
     repo_path: &Path,
     num_workers: usize,
+    max_connections: usize,
     pkgdepends_patch_path: &Path,
     xfun_patch_path: &Path,
 ) -> Result<String> {
     let prelude = script_prelude(
         repo_path,
         num_workers,
+        max_connections,
         pkgdepends_patch_path,
         xfun_patch_path,
     );
@@ -644,6 +650,7 @@ invisible(results)
 fn script_prelude(
     repo_path: &Path,
     num_workers: usize,
+    max_connections: usize,
     pkgdepends_patch_path: &Path,
     xfun_patch_path: &Path,
 ) -> String {
@@ -651,6 +658,7 @@ fn script_prelude(
     let pkgdepends_patch_literal = util::r_string_literal(&pkgdepends_patch_path.to_string_lossy());
     let xfun_patch_literal = util::r_string_literal(&xfun_patch_path.to_string_lossy());
     let workers = num_workers.max(1);
+    let max_connections = max_connections.max(1);
 
     format!(
         r#"
@@ -672,6 +680,12 @@ Sys.setenv(R_LIBS_USER = library_dir)
 # Configure parallelism ----
 install_workers <- {workers}
 options(Ncpus = install_workers)
+
+# Configure pak/pkgcache async HTTP concurrency for binary downloads ----
+options(
+  async_http_total_con = {max_connections},
+  async_http_host_con = 50
+)
 
 # Configure pkgdepends patch ----
 pkgdepends_patch_path <- {pkgdepends_patch_literal}
@@ -841,9 +855,16 @@ mod tests {
         let path = Path::new("/tmp/example");
         let pkgdepends_patch_path = Path::new("/tmp/patch-pkgdepends.R");
         let xfun_patch_path = Path::new("/tmp/patch-xfun.R");
-        let script =
-            build_revdep_install_script(path, 8, "noble", pkgdepends_patch_path, xfun_patch_path)
-                .expect("script must build");
+        let max_connections = util::optimal_max_connections(8);
+        let script = build_revdep_install_script(
+            path,
+            8,
+            max_connections,
+            "noble",
+            pkgdepends_patch_path,
+            xfun_patch_path,
+        )
+        .expect("script must build");
         assert!(script.contains("https://packagemanager.posit.co/cran/__linux__/%s/latest"));
         assert!(script.contains(
             "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", 'noble')"
@@ -860,6 +881,8 @@ mod tests {
         assert!(script.contains("xfun_patch_path <- '/tmp/patch-xfun.R'"));
         assert!(script.contains("source(pkgdepends_patch_path)"));
         assert!(script.contains("pak_patch_parallel_install(pkgdepends_patch_path)"));
+        assert!(script.contains(&format!("async_http_total_con = {max_connections}")));
+        assert!(script.contains("async_http_host_con = 50"));
         assert!(script.contains("parse_description_dependencies <- function"));
         assert!(
             script.contains("dev_package_deps <- parse_description_dependencies(\"DESCRIPTION\"")
@@ -888,8 +911,15 @@ mod tests {
         let path = Path::new("/tmp/example");
         let pkgdepends_patch_path = Path::new("/tmp/patch-pkgdepends.R");
         let xfun_patch_path = Path::new("/tmp/patch-xfun.R");
-        let script = build_revdep_run_script(path, 8, pkgdepends_patch_path, xfun_patch_path)
-            .expect("script must build");
+        let max_connections = util::optimal_max_connections(8);
+        let script = build_revdep_run_script(
+            path,
+            8,
+            max_connections,
+            pkgdepends_patch_path,
+            xfun_patch_path,
+        )
+        .expect("script must build");
 
         assert!(script.contains("xfun::rev_check"));
         assert!(script.contains("src = \".\""));
@@ -909,6 +939,8 @@ mod tests {
         assert!(script.contains("source(xfun_patch_path)"));
         assert!(script.contains("xfun_patch_parallel_download()"));
         assert!(script.contains("?ignore-build-errors&ignore-unavailable"));
+        assert!(script.contains(&format!("async_http_total_con = {max_connections}")));
+        assert!(script.contains("async_http_host_con = 50"));
         assert!(script.contains("options("));
         assert!(script.contains("browser = \"false\""));
         assert!(script.contains("install.packages.compile.from.source = \"always\""));
