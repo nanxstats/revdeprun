@@ -7,7 +7,7 @@
 - Accelerate binary package downloads by setting pkgcache async HTTP options
   for pak. Now binary package downloads use the same computed max connections
   with a 50 connections per host cap, increased from the pkgcache default of
-  6 connections per host (#138).
+  6 connections per host (#139).
 
 ## revdeprun 2.1.2
 
