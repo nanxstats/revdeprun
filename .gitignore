@@ -1,3 +1,9 @@
 /target
 
 /.claude/
+
+# Zensical site
+pyproject.toml
+uv.lock
+.python-version
+/site/
