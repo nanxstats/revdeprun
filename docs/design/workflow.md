@@ -26,6 +26,17 @@ flowchart LR
     Clone --> Next([To Phase 2])
     UseLocal --> Next
     Extract --> Next
+
+    style Start fill:#f4cccc
+    style Next fill:#f4cccc
+    style Setup fill:#fce5cd
+    style CheckR fill:#fce5cd
+    style InstallR fill:#d9ead3
+    style InstallDocs fill:#d9ead3
+    style PrepRepo fill:#fce5cd
+    style Clone fill:#fff2cc
+    style UseLocal fill:#fff2cc
+    style Extract fill:#fff2cc
 ```
 
 This is implemented in `src/lib.rs` by orchestrating:
@@ -46,7 +57,21 @@ flowchart LR
 
     RunCheck --> Output1[revdep/library/]
     RunCheck --> Output2[00check_diffs.md<br/>00check_diffs.html]
-    RunCheck --> Output3[*.Rcheck/<br/>*.Rcheck2/]
+    RunCheck --> Output3[\*.Rcheck/<br/>\*.Rcheck2//]
+
+    Output1 --> End([Complete])
+    Output2 --> End
+    Output3 --> End
+
+    style Start fill:#f4cccc
+    style End fill:#f4cccc
+    style ResolveSys fill:#fce5cd
+    style InstallSys fill:#d9ead3
+    style PreInstall fill:#fce5cd
+    style RunCheck fill:#c9daf8
+    style Output1 fill:#fff2cc
+    style Output2 fill:#fff2cc
+    style Output3 fill:#fff2cc
 ```
 
 The two key pieces are:
