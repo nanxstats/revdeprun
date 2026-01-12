@@ -1,6 +1,6 @@
 # Changelog
 
-## revdeprun (development version)
+## revdeprun 2.2.1
 
 ### Documentation
 
