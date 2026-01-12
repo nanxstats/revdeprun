@@ -36,7 +36,7 @@ revdeprun answers those questions by assuming a particular environment:
 disposable Ubuntu LTS cloud instances, where you can pay for lots of CPU when
 you need it, then delete the machine when you are done.
 
-## What revdeprun does?
+## What does revdeprun do?
 
 In one command, revdeprun does the following:
 
