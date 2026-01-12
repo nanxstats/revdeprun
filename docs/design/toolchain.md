@@ -20,7 +20,7 @@ This supports the `r-lib/actions/setup-r` style shorthands like:
 
 See `src/r_version.rs`.
 
-## R installation (Ubuntu)
+## R installation
 
 On Ubuntu, revdeprun downloads the platform-specific `.deb`, installs
 prerequisites, and installs the package with `gdebi`. It then creates stable
