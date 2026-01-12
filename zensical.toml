@@ -24,7 +24,6 @@ nav = [
     "design/toolchain.md",
     "design/sysreqs.md",
     "design/deps.md",
-    "design/patches.md",
     "design/performance.md",
   ] },
 ]
