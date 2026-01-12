@@ -1,166 +1,70 @@
 ---
-icon: lucide/rocket
+icon: lucide/cloud
 ---
 
-# Get started
+# revdeprun
 
-For full documentation visit [zensical.org](https://zensical.org/docs/).
+revdeprun is a Rust CLI that provisions R on Ubuntu and runs reverse dependency
+checks for an R package in one command. It is usable by anyone and designed
+for cloud instances: fast, reproducible, and disposable.
 
-## Commands
+## Quick start
 
-* [`zensical new`][new] - Create a new project
-* [`zensical serve`][serve] - Start local web server
-* [`zensical build`][build] - Build your site
+On a fresh Ubuntu LTS cloud instance:
 
-  [new]: https://zensical.org/docs/usage/new/
-  [serve]: https://zensical.org/docs/usage/preview/
-  [build]: https://zensical.org/docs/usage/build/
-
-## Examples
-
-### Admonitions
-
-> Go to [documentation](https://zensical.org/docs/authoring/admonitions/)
-
-!!! note
-
-    This is a **note** admonition. Use it to provide helpful information.
-
-!!! warning
-
-    This is a **warning** admonition. Be careful!
-
-### Details
-
-> Go to [documentation](https://zensical.org/docs/authoring/admonitions/#collapsible-blocks)
-
-??? info "Click to expand for more info"
-    
-    This content is hidden until you click to expand it.
-    Great for FAQs or long explanations.
-
-## Code Blocks
-
-> Go to [documentation](https://zensical.org/docs/authoring/code-blocks/)
-
-``` python hl_lines="2" title="Code blocks"
-def greet(name):
-    print(f"Hello, {name}!") # (1)!
-
-greet("Python")
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+sudo apt-get update && sudo apt-get install -y build-essential
+cargo install revdeprun
+revdeprun https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
 ```
 
-1.  > Go to [documentation](https://zensical.org/docs/authoring/code-blocks/#code-annotations)
+## Why revdeprun?
 
-    Code annotations allow to attach notes to lines of code.
+Reverse dependency checks are ecosystem-scale integration tests: you check your
+package by checking everything that depends on it.
 
-Code can also be highlighted inline: `#!python print("Hello, Python!")`.
+At small scale, you can do this locally with tools like `{revdepcheck}` or
+`xfun::rev_check()`. At large scale (hundreds or thousands of reverse
+dependencies), the bottleneck is no longer "how do I run checks?", it is:
 
-## Content tabs
+- How do I provision a clean cloud instance quickly and repeatedly?
+- How do I install thousands of dependencies without compiling everything?
+- How do I make the process reliable enough that I can trust the results?
 
-> Go to [documentation](https://zensical.org/docs/authoring/content-tabs/)
+revdeprun answers those questions by assuming a particular environment:
+disposable Ubuntu LTS cloud instances, where you can pay for lots of CPU when
+you need it, then delete the machine when you are done.
 
-=== "Python"
+## What revdeprun does?
 
-    ``` python
-    print("Hello from Python!")
-    ```
+In one command, revdeprun does the following:
 
-=== "Rust"
+- Installs (or reuses) a specific R version.
+- Installs common tooling needed by `R CMD check` (Quarto, pandoc, TinyTeX).
+- Resolves and installs Linux system requirements for the full reverse-dep set.
+- Pre-installs R package dependencies, preferentially from binaries.
+- Runs `xfun::rev_check()` for parallel reverse dependency checking.
 
-    ``` rs
-    println!("Hello from Rust!");
-    ```
+## Why a Rust CLI?
 
-## Diagrams
+This tool exists to make "fresh instance to finished revdep results" predictable.
+Rust is a good fit because it gives you:
 
-> Go to [documentation](https://zensical.org/docs/authoring/diagrams/)
+- A single executable with good error messages.
+- A clear separation between orchestration (Rust) and the checking recipe (R).
+- Tests that can run without having R installed.
 
-``` mermaid
-graph LR
-  A[Start] --> B{Error?};
-  B -->|Yes| C[Hmm...];
-  C --> D[Debug];
-  D --> B;
-  B ---->|No| E[Yay!];
-```
+## Design goals (and non-goals)
 
-## Footnotes
+Design goals:
 
-> Go to [documentation](https://zensical.org/docs/authoring/footnotes/)
+- One command that works on a clean cloud instance.
+- Fast by default (binaries, parallelism, tuned networking).
+- Deterministic and isolated.
 
-Here's a sentence with a footnote.[^1]
+Non-goals:
 
-Hover it, to see a tooltip.
-
-[^1]: This is the footnote.
-
-
-## Formatting
-
-> Go to [documentation](https://zensical.org/docs/authoring/formatting/)
-
-- ==This was marked (highlight)==
-- ^^This was inserted (underline)^^
-- ~~This was deleted (strikethrough)~~
-- H~2~O
-- A^T^A
-- ++ctrl+alt+del++
-
-## Icons, Emojis
-
-> Go to [documentation](https://zensical.org/docs/authoring/icons-emojis/)
-
-* :sparkles: `:sparkles:`
-* :rocket: `:rocket:`
-* :tada: `:tada:`
-* :memo: `:memo:`
-* :eyes: `:eyes:`
-
-## Maths
-
-> Go to [documentation](https://zensical.org/docs/authoring/math/)
-
-$$
-\cos x=\sum_{k=0}^{\infty}\frac{(-1)^k}{(2k)!}x^{2k}
-$$
-
-!!! warning "Needs configuration"
-    Note that MathJax is included via a `script` tag on this page and is not
-    configured in the generated default configuration to avoid including it
-    in a pages that do not need it. See the documentation for details on how
-    to configure it on all your pages if they are more Maths-heavy than these
-    simple starter pages.
-
-<script id="MathJax-script" async src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
-<script>
-  window.MathJax = {
-    tex: {
-      inlineMath: [["\\(", "\\)"]],
-      displayMath: [["\\[", "\\]"]],
-      processEscapes: true,
-      processEnvironments: true
-    },
-    options: {
-      ignoreHtmlClass: ".*|",
-      processHtmlClass: "arithmatex"
-    }
-  };
-</script>
-
-## Task Lists
-
-> Go to [documentation](https://zensical.org/docs/authoring/lists/#using-task-lists)
-
-* [x] Install Zensical
-* [x] Configure `zensical.toml`
-* [x] Write amazing documentation
-* [ ] Deploy anywhere
-
-## Tooltips
-
-> Go to [documentation](https://zensical.org/docs/authoring/tooltips/)
-
-[Hover me][example]
-
-  [example]: https://example.com "I'm a tooltip!"
+- "Safe to run anywhere." Revdep checks execute untrusted code by design.
+- Supporting every Linux distribution. Ubuntu LTS is the target.
+- Replacing {revdepcheck} or {xfun}. revdeprun is an orchestrator.
