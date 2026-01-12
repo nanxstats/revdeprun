@@ -1,5 +1,5 @@
 ---
-icon: lucide/package
+icon: lucide/layers
 ---
 
 # System requirements

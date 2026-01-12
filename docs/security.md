@@ -1,5 +1,5 @@
 ---
-icon: lucide/shield-alert
+icon: lucide/shield-check
 ---
 
 # Security

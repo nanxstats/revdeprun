@@ -1,5 +1,5 @@
 ---
-icon: lucide/bug
+icon: lucide/drill
 ---
 
 # Patches
