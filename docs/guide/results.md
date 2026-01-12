@@ -15,7 +15,7 @@ All run artifacts live under the package directory.
 
 The exact directory layout is controlled by `xfun::rev_check()`.
 No check summary files and per-package directories are created if
-zero reverse dependency check issues was found.
+zero reverse dependency check issues were found.
 
 ## How to interpret diffs
 
