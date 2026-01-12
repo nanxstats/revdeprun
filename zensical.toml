@@ -1,6 +1,6 @@
 [project]
 site_name = "Reverse dependency checks for everyone"
-site_description = "A Rust CLI to help R package developers run reverse dependency checks easily in the cloud."
+site_description = "Fast and reliable reverse dependency checks for R packages on the cloud."
 site_author = "Nan Xiao"
 site_url = "https://nanx.me/revdeprun/"
 repo_url = "https://github.com/nanxstats/revdeprun"
