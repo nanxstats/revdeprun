@@ -1,5 +1,12 @@
 # Changelog
 
+## revdeprun (development version)
+
+### Documentation
+
+- Added a book style documentation site under `docs/` describing the
+  revdeprun workflow and key design decisions (#143, #144).
+
 ## revdeprun 2.2.0
 
 ### Improvements
