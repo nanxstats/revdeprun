@@ -34,11 +34,12 @@ is enormous. In practice, you want a set that is:
 
 revdeprun approximates this by installing:
 
-- Your package.
-- Dependencies of your package (from both the CRAN metadata and your DESCRIPTION).
-  - All reverse dependencies (`Depends`/`Imports`/`LinkingTo`/`Suggests`).
-- First-order dependencies of those targets (including `Suggests`), but not the
-  full recursive `Suggests` closure.
+- Your package and dependencies of your package (from both the CRAN metadata
+  and your `DESCRIPTION` file).
+- All reverse dependencies of your package (via `Depends`/`Imports`/`LinkingTo`/`Suggests`).
+- Dependencies for running `R CMD check` on all reverse dependencies.
+  This includes the full recursive closure of their hard dependencies,
+  but only the first-order `Suggests`, not the full recursive `Suggests` closure.
 
 This is a deliberate compromise: `Suggests` matter for checks, but recursive
 `Suggests` is too much.
