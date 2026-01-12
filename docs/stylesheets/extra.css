@@ -108,3 +108,9 @@ h4 code {
 .md-typeset table:not([class]) {
     font-size: 0.8rem;
 }
+
+.md-typeset code,
+.md-typeset kbd,
+.md-typeset pre {
+    font-feature-settings: "calt", "liga";
+}
