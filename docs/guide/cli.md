@@ -1,5 +1,5 @@
 ---
-icon: lucide/sliders-horizontal
+icon: lucide/terminal
 ---
 
 # CLI reference

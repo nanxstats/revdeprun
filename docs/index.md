@@ -1,5 +1,5 @@
 ---
-icon: lucide/cloud
+icon: lucide/house
 ---
 
 # revdeprun
