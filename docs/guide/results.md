@@ -22,7 +22,7 @@ zero reverse dependency check issues were found.
 `xfun::rev_check()` checks each reverse dependency twice:
 
 - Against the CRAN version of your package.
-- Against your working tree.
+- Against the development version of your package.
 
 The diff report helps you focus on regressions that are likely caused by your
 changes, not by unrelated breakage on CRAN. False positives can still occur,
