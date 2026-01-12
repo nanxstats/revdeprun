@@ -11,7 +11,7 @@ in a cloud setting.
 ## Design principles
 
 - Assume cloud: disposable Ubuntu instances, internet access, no secrets.
-- Sensible defaults: work out of the box without tunning.
+- Sensible defaults: work out of the box without tuning.
 - Prefer binaries: compile as little as possible.
 - Make parallelism the default: checks scale well; installs mostly do.
 - Treat the network as unreliable: retry, deduplicate, and keep going.
