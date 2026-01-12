@@ -4,7 +4,7 @@ icon: lucide/terminal
 
 # CLI reference
 
-The CLI is intentionally built clean and minimal. Most behavior is encoded
+The CLI is intentionally clean and minimal. Most behavior is encoded
 in the workflow with sensible defaults.
 
 ## Synopsis
