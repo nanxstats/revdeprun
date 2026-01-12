@@ -1,6 +1,6 @@
 [project]
 site_name = "Reverse dependency checks for everyone"
-site_description = "A Rust CLI to help R package developers run reverse dependency checks easily in the cloud."
+site_description = "Fast and reliable reverse dependency checks for R packages on the cloud."
 site_author = "Nan Xiao"
 site_url = "https://nanx.me/revdeprun/"
 repo_url = "https://github.com/nanxstats/revdeprun"
@@ -10,7 +10,24 @@ copyright = """
 Copyright &copy; 2026 revdeprun authors
 """
 
-nav = [{ "Get started" = "index.md" }]
+nav = [
+  { "Home" = "index.md" },
+  { "Security" = "security.md" },
+  { "Guide" = [
+    "guide/install.md",
+    "guide/cli.md",
+    "guide/results.md",
+  ] },
+  { "Design" = [
+    "design/principles.md",
+    "design/workflow.md",
+    "design/toolchain.md",
+    "design/sysreqs.md",
+    "design/deps.md",
+    "design/patches.md",
+    "design/performance.md",
+  ] },
+]
 
 extra_css = ["stylesheets/extra.css"]
 
@@ -22,32 +39,32 @@ language = "en"
 font = false
 
 features = [
-    "announce.dismiss",
-    "content.action.edit",
-    "content.action.view",
-    "content.code.annotate",
-    "content.code.copy",
-    "content.code.select",
-    "content.footnote.tooltips",
-    "content.tabs.link",
-    "content.tooltips",
-    "header.autohide",
-    #"navigation.expand",
-    "navigation.footer",
-    "navigation.indexes",
-    "navigation.instant",
-    "navigation.instant.prefetch",
-    #"navigation.instant.progress",
-    "navigation.path",
-    #"navigation.prune",
-    "navigation.sections",
-    #"navigation.tabs",
-    #"navigation.tabs.sticky",
-    "navigation.top",
-    "navigation.tracking",
-    "search.highlight",
-    #"toc.follow",
-    #"toc.integrate",
+  "announce.dismiss",
+  "content.action.edit",
+  "content.action.view",
+  "content.code.annotate",
+  "content.code.copy",
+  "content.code.select",
+  "content.footnote.tooltips",
+  "content.tabs.link",
+  "content.tooltips",
+  "header.autohide",
+  #"navigation.expand",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.instant",
+  "navigation.instant.prefetch",
+  #"navigation.instant.progress",
+  "navigation.path",
+  #"navigation.prune",
+  "navigation.sections",
+  #"navigation.tabs",
+  #"navigation.tabs.sticky",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+  #"toc.follow",
+  #"toc.integrate",
 ]
 
 [[project.theme.palette]]
