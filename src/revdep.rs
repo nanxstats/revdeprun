@@ -473,6 +473,9 @@ pak_patch_parallel_install(pkgdepends_patch_path)
 # Ensure tooling prerequisites ----
 ensure_installed("xfun")
 
+# Inform user about dependency resolution work ----
+message("Parsing package metadata and dependency lists...\nThis can take a few minutes for large revdep sets.")
+
 # DESCRIPTION parsing helpers ----
 strip_version <- function(entries) {{
   entries <- gsub("\\s*\\(.*?\\)", "", entries)
@@ -564,6 +567,10 @@ if (length(revdeps) == 0) {{
 
 # Install packages ----
 if (length(install_targets) > 0) {{
+  message(sprintf(
+    "Installing %d packages with pak::pkg_install()...",
+    length(install_targets)
+  ))
   pak_install_retry(install_targets)
 }} else {{
   stop("No installation targets determined for pak::pkg_install().")
@@ -881,6 +888,9 @@ mod tests {
         assert!(script.contains("xfun_patch_path <- '/tmp/patch-xfun.R'"));
         assert!(script.contains("source(pkgdepends_patch_path)"));
         assert!(script.contains("pak_patch_parallel_install(pkgdepends_patch_path)"));
+        assert!(script.contains(
+            "Parsing package metadata and dependency lists...\\nThis can take a few minutes for large revdep sets."
+        ));
         assert!(script.contains(&format!("async_http_total_con = {max_connections}")));
         assert!(script.contains("async_http_host_con = 50"));
         assert!(script.contains("parse_description_dependencies <- function"));
@@ -904,6 +914,7 @@ mod tests {
         assert!(script.contains("Skipping packages not available from repository"));
         assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains(".libPaths(unique(c(library_dir, .libPaths())))"));
+        assert!(script.contains("Installing %d packages with pak::pkg_install()..."));
     }
 
     #[test]
