@@ -1,5 +1,12 @@
 # Changelog
 
+## revdeprun 2.2.2
+
+### Improvements
+
+- Add progress messages during revdep dependency parsing and before bulk
+  pak installs to avoid long silent periods in the terminal (#153).
+
 ## revdeprun 2.2.1
 
 ### Documentation
