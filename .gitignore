@@ -6,4 +6,5 @@
 pyproject.toml
 uv.lock
 .python-version
+main.py
 /site/
