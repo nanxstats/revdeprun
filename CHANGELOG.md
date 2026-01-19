@@ -1,11 +1,12 @@
 # Changelog
 
-## revdeprun (development version)
+## revdeprun 2.2.3
 
 ### Maintenance
 
-- Remove the xfun tarball download monkey patch now that xfun >= 0.56 supports
-  parallel downloads natively. Keep `xfun.rev_check.download_cores` set to 50.
+- Remove the xfun tarball download monkey patch now that
+  xfun >= 0.56 supports parallel downloads natively.
+  Keep `xfun.rev_check.download_cores` set to 50 (#156).
 
 ## revdeprun 2.2.2
 
