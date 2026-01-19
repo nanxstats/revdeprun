@@ -12,7 +12,8 @@ revdeprun is designed to optimize time-to-results. Its performance model is:
 ## Scaling tips
 
 - On very large machines, raise file descriptor limits: `ulimit -n 10240`.
-- Expect diminishing returns: the slowest individual packages dominate near the end.
+- Expect diminishing returns: the slowest individual packages dominate near
+  the end (during both dependency installs and checks).
 - Disk matters: `R CMD check` can write a lot, so avoid tiny or slow storage.
 
 ## Parallel workers for reverse dependency check
@@ -33,7 +34,7 @@ with a 50 connections per host cap, increasing from the pkgcache default of
 
 `xfun::rev_check()` downloads reverse dependency tarballs from CRAN.
 It supports parallel downloads for large reverse dependency sets
-since 0.56 ([yihui/xfun#112](https://github.com/yihui/xfun/pull/112)).
+since version 0.56 ([yihui/xfun#112](https://github.com/yihui/xfun/pull/112)).
 
 Concurrency is controlled by `getOption("xfun.rev_check.download_cores")`.
 revdeprun sets it to 50, instead of the xfun default of the number of CPU cores.
@@ -58,7 +59,7 @@ max_connections = min(4096, ceil(max(128, 3 * Ncpus + 64) / 128) * 128)
 
 `Ncpus` is the number of parallel workers revdeprun will use.
 
-### Why this works
+Why this works:
 
 - The main process typically needs about 1 to 2 R connections per worker
   (pipes for result/control) plus a small fixed overhead.
@@ -68,10 +69,9 @@ max_connections = min(4096, ceil(max(128, 3 * Ncpus + 64) / 128) * 128)
 - It respects R's hard cap (`4096`) and the legacy default (`128`), and rounds
   up to the next multiple of `128` for stable "round number" values.
 
-### Example values
-
 The unrounded baseline is `max(128, 3 * Ncpus + 64)`. revdeprun then rounds up
 to the next multiple of `128` and caps the final value at `4096`.
+Some example values:
 
 - 16 cores &rarr; computed `112` &rarr; `128` (lift to floor)
 - 32 cores &rarr; computed `160` &rarr; `256`
