@@ -31,12 +31,12 @@ with a 50 connections per host cap, increasing from the pkgcache default of
 
 ## Source tarball downloads
 
-`xfun::rev_check()` downloads reverse dependency tarballs from CRAN. Historically
-this was serial, which is painful at 1,000+ packages.
+`xfun::rev_check()` downloads reverse dependency tarballs from CRAN.
+It supports parallel downloads for large reverse dependency sets
+since 0.56 ([yihui/xfun#112](https://github.com/yihui/xfun/pull/112)).
 
-`assets/patch-xfun.R` patches `xfun:::download_tarball()` to download in parallel
-using `parallel::mcmapply()`. Concurrency is controlled by
-`getOption("xfun.rev_check.download_cores")`. Default is 50.
+Concurrency is controlled by `getOption("xfun.rev_check.download_cores")`.
+revdeprun sets it to 50, instead of the xfun default of the number of CPU cores.
 
 ## Auto-tuning `--max-connections`
 
