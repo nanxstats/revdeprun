@@ -102,7 +102,16 @@ fn linux_platform() -> Result<String> {
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("missing VERSION_ID in /etc/os-release"))?;
 
+    let (id, version) = fallback_platform(&id, &version);
     Ok(format!("linux-{id}-{version}"))
+}
+
+/// Maps unsupported distro versions to their closest supported version.
+fn fallback_platform<'a>(id: &'a str, version: &'a str) -> (&'a str, &'a str) {
+    match (id, version) {
+        ("debian", "13") => ("debian", "12"),
+        _ => (id, version),
+    }
 }
 
 fn parse_os_release(contents: &str) -> HashMap<String, String> {
