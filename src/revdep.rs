@@ -619,7 +619,7 @@ options(
   browser = "false",
   install.packages.compile.from.source = "always",
   xfun.rev_check.compare = TRUE,
-  xfun.rev_check.download_cores = 50,
+  xfun.rev_check.download_cores = 10,
   xfun.rev_check.timeout = 30 * 60,
   xfun.rev_check.summary = TRUE,
   xfun.rev_check.sample = Inf,
@@ -676,7 +676,7 @@ options(Ncpus = install_workers)
 # Configure pak/pkgcache async HTTP concurrency for binary downloads ----
 options(
   async_http_total_con = {max_connections},
-  async_http_host_con = 50
+  async_http_host_con = 10
 )
 
 # Configure pkgdepends patch ----
@@ -857,7 +857,7 @@ mod tests {
             "Parsing package metadata and dependency lists...\\nThis can take a few minutes for large revdep sets."
         ));
         assert!(script.contains(&format!("async_http_total_con = {max_connections}")));
-        assert!(script.contains("async_http_host_con = 50"));
+        assert!(script.contains("async_http_host_con = 10"));
         assert!(script.contains("parse_description_dependencies <- function"));
         assert!(
             script.contains("dev_package_deps <- parse_description_dependencies(\"DESCRIPTION\"")
@@ -906,12 +906,12 @@ mod tests {
         assert!(script.contains("pak_patch_parallel_install(pkgdepends_patch_path)"));
         assert!(script.contains("?ignore-build-errors&ignore-unavailable"));
         assert!(script.contains(&format!("async_http_total_con = {max_connections}")));
-        assert!(script.contains("async_http_host_con = 50"));
+        assert!(script.contains("async_http_host_con = 10"));
         assert!(script.contains("options("));
         assert!(script.contains("browser = \"false\""));
         assert!(script.contains("install.packages.compile.from.source = \"always\""));
         assert!(script.contains("xfun.rev_check.compare = TRUE"));
-        assert!(script.contains("xfun.rev_check.download_cores = 50"));
+        assert!(script.contains("xfun.rev_check.download_cores = 10"));
         assert!(script.contains("xfun.rev_check.timeout = 30 * 60"));
         assert!(script.contains("xfun.rev_check.summary = TRUE"));
         assert!(script.contains("xfun.rev_check.sample = Inf"));
