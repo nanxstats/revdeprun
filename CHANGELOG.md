@@ -2,6 +2,12 @@
 
 ## revdeprun (development version)
 
+### New features
+
+- Add support for Ubuntu 26.04 LTS (Resolute Raccoon), including R installation
+  via the R Hub versions API and pre-built R package binaries from the
+  Posit Public Package Manager repository (#167).
+
 ### Bug fixes
 
 - Correct `--skip-r-install` behavior to make it truly bypass R version
