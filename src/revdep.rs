@@ -835,12 +835,17 @@ mod tests {
         let path = Path::new("/tmp/example");
         let pkgdepends_patch_path = Path::new("/tmp/patch-pkgdepends.R");
         let max_connections = util::optimal_max_connections(8);
-        let script =
-            build_revdep_install_script(path, 8, max_connections, "noble", pkgdepends_patch_path)
-                .expect("script must build");
+        let script = build_revdep_install_script(
+            path,
+            8,
+            max_connections,
+            "resolute",
+            pkgdepends_patch_path,
+        )
+        .expect("script must build");
         assert!(script.contains("https://packagemanager.posit.co/cran/__linux__/%s/latest"));
         assert!(script.contains(
-            "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", 'noble')"
+            "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", 'resolute')"
         ));
         assert!(script.contains("install.packages(\n      \"pak\""));
         assert!(script.contains("pak::pkg_install("));
@@ -928,12 +933,12 @@ mod tests {
     fn parses_codename_from_os_release() {
         let contents = r#"
 NAME="Ubuntu"
-VERSION="24.04 LTS (Noble Nimbus)"
-VERSION_CODENAME=noble
-UBUNTU_CODENAME=noble
+VERSION="26.04 LTS (Resolute Raccoon)"
+VERSION_CODENAME=resolute
+UBUNTU_CODENAME=resolute
 "#;
         let codename = ubuntu_codename_from_os_release(contents);
-        assert_eq!(codename.as_deref(), Some("noble"));
+        assert_eq!(codename.as_deref(), Some("resolute"));
     }
 
     #[test]

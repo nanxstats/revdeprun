@@ -6,7 +6,7 @@ icon: lucide/download
 
 revdeprun is built for Ubuntu LTS cloud instances. You will need:
 
-- Ubuntu 22.04 or 24.04 (or newer LTS).
+- Ubuntu 22.04, 24.04, 26.04 (or newer LTS).
 - `git` on `PATH`.
 - `sudo` access (for R + system requirements).
 - Internet access (CRAN metadata, R installers, packages).
