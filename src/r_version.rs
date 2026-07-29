@@ -1,6 +1,6 @@
 use std::{collections::HashMap, env, fs};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use reqwest::blocking::Client;
 use serde::Deserialize;
 
@@ -18,6 +18,18 @@ pub struct ResolvedRVersion {
     pub kind: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ApiResponse {
+    Resolved(ResolvedRVersion),
+    Error(ApiError),
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiError {
+    error: String,
+}
+
 impl ResolvedRVersion {
     /// Returns the directory name used under `/opt/R/` by the upstream installer.
     pub fn install_dir_name(&self) -> &str {
@@ -32,24 +44,79 @@ impl ResolvedRVersion {
 pub fn resolve(spec: &str) -> Result<ResolvedRVersion> {
     let normalized = normalize_spec(spec);
     let platform = linux_platform().context("failed to determine Linux distribution")?;
-    let mut url = format!("{API_ENDPOINT}/{normalized}/{platform}");
+    let client = http_client()?;
 
-    if let Some(arch) = detect_arch() {
+    resolve_for_platform(&normalized, &platform, detect_arch(), |url| {
+        request_version(&client, url)
+    })
+}
+
+fn resolve_for_platform<F>(
+    normalized: &str,
+    initial_platform: &str,
+    arch: Option<&str>,
+    mut request: F,
+) -> Result<ResolvedRVersion>
+where
+    F: FnMut(&str) -> Result<ApiResponse>,
+{
+    let mut platform = initial_platform.to_string();
+
+    loop {
+        let url = version_url(normalized, &platform, arch);
+        match request(&url)? {
+            ApiResponse::Resolved(version) => return Ok(version),
+            ApiResponse::Error(error) => {
+                if is_unsupported_linux_distro(&error.error) {
+                    if let Some(fallback) = previous_debian_platform(&platform) {
+                        eprintln!(
+                            "Warning: R Hub does not support {platform}; retrying with {fallback}."
+                        );
+                        platform = fallback;
+                        continue;
+                    }
+                }
+
+                bail!(
+                    "version API returned error for request {url}: {}",
+                    error.error
+                );
+            }
+        }
+    }
+}
+
+fn request_version(client: &Client, url: &str) -> Result<ApiResponse> {
+    let response = client
+        .get(url)
+        .send()
+        .with_context(|| format!("failed to contact version API at {url}"))?
+        .json::<ApiResponse>()
+        .with_context(|| format!("failed to decode version API response from {url}"))?;
+
+    Ok(response)
+}
+
+fn version_url(normalized: &str, platform: &str, arch: Option<&str>) -> String {
+    let mut url = format!("{API_ENDPOINT}/{normalized}/{platform}");
+    if let Some(arch) = arch {
         url.push('/');
         url.push_str(arch);
     }
+    url
+}
 
-    let client = http_client()?;
-    let response = client
-        .get(url.clone())
-        .send()
-        .with_context(|| format!("failed to contact version API at {url}"))?
-        .error_for_status()
-        .with_context(|| format!("version API returned error for request {url}"))?;
+fn is_unsupported_linux_distro(error: &str) -> bool {
+    error.contains("Unknown Linux distro")
+}
 
-    response
-        .json::<ResolvedRVersion>()
-        .with_context(|| format!("failed to decode version metadata from {url}"))
+fn previous_debian_platform(platform: &str) -> Option<String> {
+    let version = platform
+        .strip_prefix("linux-debian-")?
+        .parse::<u32>()
+        .ok()?;
+    let previous = version.checked_sub(1)?;
+    (previous > 0).then(|| format!("linux-debian-{previous}"))
 }
 
 fn http_client() -> Result<Client> {
@@ -102,16 +169,7 @@ fn linux_platform() -> Result<String> {
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("missing VERSION_ID in /etc/os-release"))?;
 
-    let (id, version) = fallback_platform(&id, &version);
     Ok(format!("linux-{id}-{version}"))
-}
-
-/// Maps unsupported distro versions to their closest supported version.
-fn fallback_platform<'a>(id: &'a str, version: &'a str) -> (&'a str, &'a str) {
-    match (id, version) {
-        ("debian", "13") => ("debian", "12"),
-        _ => (id, version),
-    }
 }
 
 fn parse_os_release(contents: &str) -> HashMap<String, String> {
@@ -162,5 +220,84 @@ UBUNTU_CODENAME=jammy
         let pairs = parse_os_release(sample);
         assert_eq!(pairs.get("ID").map(String::as_str), Some("ubuntu"));
         assert_eq!(pairs.get("VERSION_ID").map(String::as_str), Some("22.04"));
+    }
+
+    #[test]
+    fn falls_back_to_the_next_older_debian_platform() {
+        let mut requests = Vec::new();
+        let resolved = resolve_for_platform("release", "linux-debian-14", Some("x86_64"), |url| {
+            requests.push(url.to_string());
+            if url.contains("linux-debian-14") {
+                Ok(ApiResponse::Error(ApiError {
+                    error: "Error: Unknown Linux distro: 'linux-debian-14'.".to_string(),
+                }))
+            } else {
+                Ok(ApiResponse::Resolved(ResolvedRVersion {
+                    version: "4.6.1".to_string(),
+                    url: "https://example.com/r.deb".to_string(),
+                    kind: Some("release".to_string()),
+                }))
+            }
+        })
+        .unwrap();
+
+        assert_eq!(resolved.version, "4.6.1");
+        assert_eq!(
+            requests,
+            [
+                format!("{API_ENDPOINT}/release/linux-debian-14/x86_64"),
+                format!("{API_ENDPOINT}/release/linux-debian-13/x86_64"),
+            ]
+        );
+    }
+
+    #[test]
+    fn does_not_fall_back_for_invalid_r_version() {
+        let mut request_count = 0;
+        let error =
+            resolve_for_platform("not-a-version", "linux-debian-14", Some("x86_64"), |_| {
+                request_count += 1;
+                Ok(ApiResponse::Error(ApiError {
+                    error: "Error: Invalid version specification: 'not-a-version'.".to_string(),
+                }))
+            })
+            .unwrap_err();
+
+        assert_eq!(request_count, 1);
+        assert!(error.to_string().contains("Invalid version specification"));
+    }
+
+    #[test]
+    fn only_falls_back_for_numeric_debian_platforms() {
+        assert_eq!(
+            previous_debian_platform("linux-debian-14"),
+            Some("linux-debian-13".to_string())
+        );
+        assert_eq!(previous_debian_platform("linux-debian-testing"), None);
+        assert_eq!(previous_debian_platform("linux-ubuntu-26.04"), None);
+    }
+
+    #[test]
+    fn parses_supported_and_unsupported_api_responses() {
+        let supported = r#"{
+            "version": "4.6.1",
+            "type": "release",
+            "url": "https://cdn.posit.co/r/debian-13/pkgs/r-4.6.1_1_amd64.deb"
+        }"#;
+        let unsupported = r#"{
+            "version": "release",
+            "os": "linux-debian-14",
+            "arch": "x86_64",
+            "error": "Error: Unknown Linux distro: 'linux-debian-14'."
+        }"#;
+
+        assert!(matches!(
+            serde_json::from_str::<ApiResponse>(supported).unwrap(),
+            ApiResponse::Resolved(_)
+        ));
+        assert!(matches!(
+            serde_json::from_str::<ApiResponse>(unsupported).unwrap(),
+            ApiResponse::Error(_)
+        ));
     }
 }
