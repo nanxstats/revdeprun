@@ -16,6 +16,10 @@
 - Replace the hard-coded Debian 13 to Debian 12 mapping from #160 with live
   fallback probing. Unsupported future Debian releases now fall back one
   release at a time until the R Hub API returns a compatible installer (#162).
+- Prevent [P3M rate limit failures](https://forum.posit.co/t/210701) during
+  large-scale reverse dependency checks by sharing a request budget between
+  pak binary downloads and xfun source tarball downloads. Downloads pause
+  after 1,800 P3M package requests and resume after a 5-minute cooldown (#168).
 
 ## revdeprun 2.2.3
 
