@@ -21,7 +21,7 @@ pub struct Args {
     #[arg(long)]
     pub work_dir: Option<PathBuf>,
 
-    /// Skip installing R and reuse the system-wide installation.
+    /// Skip R version resolution and installation; reuse the system-wide installation.
     #[arg(long)]
     pub skip_r_install: bool,
 }
