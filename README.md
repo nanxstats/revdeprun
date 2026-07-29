@@ -110,7 +110,7 @@ Options:
           Optional workspace directory where temporary files are created
 
       --skip-r-install
-          Skip installing R and reuse the system-wide installation
+          Skip R version resolution and installation; reuse the system-wide installation
 
   -h, --help
           Print help
@@ -159,6 +159,17 @@ Use an existing R installation:
 ```bash
 revdeprun --skip-r-install https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
 ```
+
+This option bypasses the R Hub version API as well as R installation.
+The system-wide `R` and `Rscript` commands must already be available on `PATH`;
+`--r-version` is ignored when this option is set. Note that Quarto, pandoc,
+and TinyTeX provisioning will also be skipped, so install any required
+document toolchain in advance.
+
+Debian is not an officially supported environment, but R installation is
+available on a best-effort basis. If the R Hub API does not yet recognize the
+detected Debian release, revdeprun probes successively older Debian releases
+and uses the first compatible installer returned by the API.
 
 ## Monitor long-running checks
 

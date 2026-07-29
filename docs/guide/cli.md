@@ -20,7 +20,7 @@ revdeprun [OPTIONS] <REPOSITORY>
 | `--r-version <R_VERSION>` | R version to install | `release` |
 | `--num-workers <N>` | Parallel workers for `xfun::rev_check()` | All CPU cores |
 | `--work-dir <WORK_DIR>` | Use a specific workspace directory | Current directory |
-| `--skip-r-install` | Reuse an existing system-wide R | Disabled |
+| `--skip-r-install` | Skip version resolution and installation; reuse system-wide R | Disabled |
 
 ## Inputs
 
