@@ -1,5 +1,16 @@
 # Changelog
 
+## revdeprun (development version)
+
+### Bug fixes
+
+- Correct `--skip-r-install` behavior to make it truly bypass R version
+  resolution as well as installation, so existing system-wide R installations
+  can be used without calling the R Hub version API (#162).
+- Replace the hard-coded Debian 13 to Debian 12 mapping from #160 with live
+  fallback probing. Unsupported future Debian releases now fall back one
+  release at a time until the R Hub API returns a compatible installer (#162).
+
 ## revdeprun 2.2.3
 
 ### Maintenance
