@@ -351,18 +351,24 @@ pub fn run_revcheck(
     let codename = detect_ubuntu_codename().context("failed to detect Ubuntu release codename")?;
 
     let pkgdepends_patch_path = write_pkgdepends_patch(workspace)?;
+    let p3m_state = NamedTempFile::new_in(workspace.temp_dir())
+        .context("failed to create P3M rate-limit state file")?;
+    let p3m_state_path = workspace::canonicalized(p3m_state.path())
+        .context("failed to resolve P3M rate-limit state file")?;
     let install_contents = build_revdep_install_script(
         repo_path,
         num_workers,
         max_connections,
         &codename,
         &pkgdepends_patch_path,
+        &p3m_state_path,
     )?;
     let run_contents = build_revdep_run_script(
         repo_path,
         num_workers,
         max_connections,
         &pkgdepends_patch_path,
+        &p3m_state_path,
     )?;
 
     let mut install_script = NamedTempFile::new_in(workspace.temp_dir())
@@ -432,12 +438,14 @@ fn build_revdep_install_script(
     max_connections: usize,
     codename: &str,
     pkgdepends_patch_path: &Path,
+    p3m_state_path: &Path,
 ) -> Result<String> {
     let prelude = script_prelude(
         repo_path,
         num_workers,
         max_connections,
         pkgdepends_patch_path,
+        p3m_state_path,
     );
     let codename_literal = util::r_string_literal(&codename.to_lowercase());
 
@@ -461,7 +469,7 @@ ensure_pak(source_repo)
 
 # Apply pkgdepends parallel patch ----
 source(pkgdepends_patch_path)
-pak_patch_parallel_install(pkgdepends_patch_path)
+pak_patch_parallel_install(pkgdepends_patch_path, p3m_state_path)
 
 # Ensure tooling prerequisites ----
 ensure_installed("xfun")
@@ -579,12 +587,14 @@ fn build_revdep_run_script(
     num_workers: usize,
     max_connections: usize,
     pkgdepends_patch_path: &Path,
+    p3m_state_path: &Path,
 ) -> Result<String> {
     let prelude = script_prelude(
         repo_path,
         num_workers,
         max_connections,
         pkgdepends_patch_path,
+        p3m_state_path,
     );
 
     let script = format!(
@@ -607,12 +617,15 @@ ensure_pak(source_repo)
 
 # Apply pkgdepends parallel patch ----
 source(pkgdepends_patch_path)
-pak_patch_parallel_install(pkgdepends_patch_path)
+pak_patch_parallel_install(pkgdepends_patch_path, p3m_state_path)
 
 # Ensure runtime prerequisites ----
 ensure_installed("xfun")
 ensure_installed("markdown")
 ensure_installed("rmarkdown")
+
+# Apply P3M rate limiting to xfun source downloads ----
+xfun_patch_p3m_downloads(p3m_state_path)
 
 # Configure xfun::rev_check() options ----
 options(
@@ -646,9 +659,11 @@ fn script_prelude(
     num_workers: usize,
     max_connections: usize,
     pkgdepends_patch_path: &Path,
+    p3m_state_path: &Path,
 ) -> String {
     let path_literal = util::r_string_literal(&repo_path.to_string_lossy());
     let pkgdepends_patch_literal = util::r_string_literal(&pkgdepends_patch_path.to_string_lossy());
+    let p3m_state_literal = util::r_string_literal(&p3m_state_path.to_string_lossy());
     let workers = num_workers.max(1);
     let max_connections = max_connections.max(1);
 
@@ -682,6 +697,8 @@ options(
 # Configure pkgdepends patch ----
 pkgdepends_patch_path <- {pkgdepends_patch_literal}
 pkgdepends_patch_path <- normalizePath(pkgdepends_patch_path, winslash = "/", mustWork = TRUE)
+p3m_state_path <- {p3m_state_literal}
+p3m_state_path <- normalizePath(p3m_state_path, winslash = "/", mustWork = TRUE)
 
 # Helpers for package installation ----
 pak_install_retry <- function(pkgs, attempts = 5) {{
@@ -834,6 +851,7 @@ mod tests {
     fn build_install_script_uses_binary_repo() {
         let path = Path::new("/tmp/example");
         let pkgdepends_patch_path = Path::new("/tmp/patch-pkgdepends.R");
+        let p3m_state_path = Path::new("/tmp/p3m-rate-limit.rds");
         let max_connections = util::optimal_max_connections(8);
         let script = build_revdep_install_script(
             path,
@@ -841,6 +859,7 @@ mod tests {
             max_connections,
             "resolute",
             pkgdepends_patch_path,
+            p3m_state_path,
         )
         .expect("script must build");
         assert!(script.contains("https://packagemanager.posit.co/cran/__linux__/%s/latest"));
@@ -856,8 +875,11 @@ mod tests {
         assert!(script.contains("?ignore-build-errors&ignore-unavailable"));
         assert!(script.contains("ensure_pak(source_repo)"));
         assert!(script.contains("pkgdepends_patch_path <- '/tmp/patch-pkgdepends.R'"));
+        assert!(script.contains("p3m_state_path <- '/tmp/p3m-rate-limit.rds'"));
         assert!(script.contains("source(pkgdepends_patch_path)"));
-        assert!(script.contains("pak_patch_parallel_install(pkgdepends_patch_path)"));
+        assert!(
+            script.contains("pak_patch_parallel_install(pkgdepends_patch_path, p3m_state_path)")
+        );
         assert!(script.contains(
             "Parsing package metadata and dependency lists...\\nThis can take a few minutes for large revdep sets."
         ));
@@ -891,9 +913,16 @@ mod tests {
     fn build_run_script_invokes_xfun() {
         let path = Path::new("/tmp/example");
         let pkgdepends_patch_path = Path::new("/tmp/patch-pkgdepends.R");
+        let p3m_state_path = Path::new("/tmp/p3m-rate-limit.rds");
         let max_connections = util::optimal_max_connections(8);
-        let script = build_revdep_run_script(path, 8, max_connections, pkgdepends_patch_path)
-            .expect("script must build");
+        let script = build_revdep_run_script(
+            path,
+            8,
+            max_connections,
+            pkgdepends_patch_path,
+            p3m_state_path,
+        )
+        .expect("script must build");
 
         assert!(script.contains("xfun::rev_check"));
         assert!(script.contains("src = \".\""));
@@ -907,8 +936,12 @@ mod tests {
         assert!(script.contains("pak_install_retry(pkg)"));
         assert!(script.contains("ensure_pak(source_repo)"));
         assert!(script.contains("pkgdepends_patch_path <- '/tmp/patch-pkgdepends.R'"));
+        assert!(script.contains("p3m_state_path <- '/tmp/p3m-rate-limit.rds'"));
         assert!(script.contains("source(pkgdepends_patch_path)"));
-        assert!(script.contains("pak_patch_parallel_install(pkgdepends_patch_path)"));
+        assert!(
+            script.contains("pak_patch_parallel_install(pkgdepends_patch_path, p3m_state_path)")
+        );
+        assert!(script.contains("xfun_patch_p3m_downloads(p3m_state_path)"));
         assert!(script.contains("?ignore-build-errors&ignore-unavailable"));
         assert!(script.contains(&format!("async_http_total_con = {max_connections}")));
         assert!(script.contains("async_http_host_con = 50"));
@@ -927,6 +960,18 @@ mod tests {
         assert!(script.contains(
             "library_dir <- normalizePath(library_dir, winslash = \"/\", mustWork = TRUE)"
         ));
+    }
+
+    #[test]
+    fn pkgdepends_patch_throttles_p3m_downloads_across_pak_and_xfun() {
+        assert!(PKGDEPENDS_PATCH.contains("P3M_REQUEST_LIMIT <- 1800L"));
+        assert!(PKGDEPENDS_PATCH.contains("P3M_WINDOW_SECONDS <- 5 * 60 + 5"));
+        assert!(PKGDEPENDS_PATCH.contains("patched_pkgplan_async_download_internal"));
+        assert!(PKGDEPENDS_PATCH.contains("P3M_REQUEST_LIMIT - state$used"));
+        assert!(PKGDEPENDS_PATCH.contains("p3m_rate_limit_record("));
+        assert!(PKGDEPENDS_PATCH.contains("xfun_patch_p3m_downloads <- function"));
+        assert!(PKGDEPENDS_PATCH.contains("original_download_tarball("));
+        assert!(PKGDEPENDS_PATCH.contains(") & !file.exists(expected)"));
     }
 
     #[test]
