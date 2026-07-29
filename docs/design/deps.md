@@ -56,4 +56,4 @@ The install script:
   source tarball downloads. Large download sets are processed in batches
   of at most 1,800 P3M packages, with a 5-minute cooldown between full batches,
   to stay below P3M's approximate
-  [2,000 request per 5 minute rate limit](https://forum.posit.co/t/210701).
+  [2,000 request per 5 minutes rate limit](https://forum.posit.co/t/210701).
