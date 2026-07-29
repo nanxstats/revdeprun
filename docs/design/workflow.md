@@ -11,13 +11,13 @@ checks with minimal surprises.
 
 ```mermaid
 flowchart LR
-    Start([Input]) --> Setup[Prepare Workspace<br/>Resolve R Version]
+    Start([Input]) --> Setup[Prepare Workspace]
     Setup --> CheckR{--skip-r-install?}
 
-    CheckR -->|No| InstallR[Install R<br/>if not detected]
-    CheckR -->|Yes| InstallDocs
-    InstallR --> InstallDocs[Install Quarto,<br/>pandoc, TinyTeX<br/>if not detected]
-    InstallDocs --> PrepRepo{Repository<br/>Type}
+    CheckR -->|No| Provision[Resolve R version<br/>Provision R + document<br/>toolchain if needed]
+    CheckR -->|Yes| Ready[Use system toolchain]
+    Provision --> Ready[Toolchain ready]
+    Ready --> PrepRepo{Repository<br/>Type}
 
     PrepRepo -->|Git URL| Clone[git clone]
     PrepRepo -->|Local Dir| UseLocal[Use as-is]
@@ -31,8 +31,8 @@ flowchart LR
     style Next fill:#f4cccc
     style Setup fill:#fce5cd
     style CheckR fill:#fce5cd
-    style InstallR fill:#d9ead3
-    style InstallDocs fill:#d9ead3
+    style Provision fill:#d9ead3
+    style Ready fill:#d9ead3
     style PrepRepo fill:#fce5cd
     style Clone fill:#fff2cc
     style UseLocal fill:#fff2cc
@@ -57,7 +57,7 @@ flowchart LR
 
     RunCheck --> Output1[revdep/library/]
     RunCheck --> Output2[00check_diffs.md<br/>00check_diffs.html]
-    RunCheck --> Output3[\*.Rcheck/<br/>\*.Rcheck2//]
+    RunCheck --> Output3[*.Rcheck/<br/>*.Rcheck2/]
 
     Output1 --> End([Complete])
     Output2 --> End
