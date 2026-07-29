@@ -208,18 +208,26 @@ mod tests {
     #[test]
     fn parses_os_release() {
         let sample = r#"NAME="Ubuntu"
-VERSION="22.04.4 LTS (Jammy Jellyfish)"
+VERSION="26.04 LTS (Resolute Raccoon)"
 ID=ubuntu
 ID_LIKE=debian
-VERSION_ID="22.04"
-PRETTY_NAME="Ubuntu 22.04.4 LTS"
-VERSION_CODENAME=jammy
-UBUNTU_CODENAME=jammy
+VERSION_ID="26.04"
+PRETTY_NAME="Ubuntu 26.04 LTS"
+VERSION_CODENAME=resolute
+UBUNTU_CODENAME=resolute
 "#;
 
         let pairs = parse_os_release(sample);
         assert_eq!(pairs.get("ID").map(String::as_str), Some("ubuntu"));
-        assert_eq!(pairs.get("VERSION_ID").map(String::as_str), Some("22.04"));
+        assert_eq!(pairs.get("VERSION_ID").map(String::as_str), Some("26.04"));
+    }
+
+    #[test]
+    fn builds_ubuntu_26_04_version_url() {
+        assert_eq!(
+            version_url("devel", "linux-ubuntu-26.04", Some("x86_64")),
+            format!("{API_ENDPOINT}/devel/linux-ubuntu-26.04/x86_64")
+        );
     }
 
     #[test]
@@ -299,5 +307,29 @@ UBUNTU_CODENAME=jammy
             serde_json::from_str::<ApiResponse>(unsupported).unwrap(),
             ApiResponse::Error(_)
         ));
+    }
+
+    #[test]
+    fn parses_ubuntu_26_04_api_response() {
+        let response = r#"{
+            "ppm-binaries": true,
+            "ppm-binary-url": "resolute",
+            "version": "4.7.0",
+            "nickname": "Unsuffered Consequences",
+            "type": "devel",
+            "url": "https://cdn.posit.co/r/ubuntu-2604/pkgs/r-devel_1_amd64.deb",
+            "date": null
+        }"#;
+
+        let parsed = serde_json::from_str::<ApiResponse>(response).unwrap();
+        let ApiResponse::Resolved(resolved) = parsed else {
+            panic!("Ubuntu 26.04 response should resolve successfully");
+        };
+        assert_eq!(resolved.version, "4.7.0");
+        assert_eq!(resolved.kind.as_deref(), Some("devel"));
+        assert_eq!(
+            resolved.url,
+            "https://cdn.posit.co/r/ubuntu-2604/pkgs/r-devel_1_amd64.deb"
+        );
     }
 }
