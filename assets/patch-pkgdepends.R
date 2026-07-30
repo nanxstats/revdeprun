@@ -247,7 +247,8 @@ pkgdepends_patch_parallel_install <- function(p3m_state_file) {
       if (length(p3m_pending) && capacity == 0L) {
         wait <- p3m_rate_limit_wait_seconds(state)
         return(
-          delay(wait)$then(function(value) {
+          # pkgdepends wraps pkgcache's private delay() as async_delay().
+          async_delay(wait)$then(function(value) {
             p3m_rate_limit_reset(p3m_state_file)
             run_next_batch()
           })

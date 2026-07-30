@@ -968,6 +968,8 @@ mod tests {
         assert!(PKGDEPENDS_PATCH.contains("P3M_WINDOW_SECONDS <- 5 * 60 + 5"));
         assert!(PKGDEPENDS_PATCH.contains("patched_pkgplan_async_download_internal"));
         assert!(PKGDEPENDS_PATCH.contains("P3M_REQUEST_LIMIT - state$used"));
+        assert!(PKGDEPENDS_PATCH.contains("async_delay(wait)$then("));
+        assert!(!PKGDEPENDS_PATCH.contains("\n          delay(wait)$then("));
         assert!(PKGDEPENDS_PATCH.contains("p3m_rate_limit_record("));
         assert!(PKGDEPENDS_PATCH.contains("xfun_patch_p3m_downloads <- function"));
         assert!(PKGDEPENDS_PATCH.contains("original_download_tarball("));
