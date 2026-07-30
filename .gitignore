@@ -1,6 +1,6 @@
 /target
 
-/.claude/
+/reference/
 
 # Zensical site
 pyproject.toml
