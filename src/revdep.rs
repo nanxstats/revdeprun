@@ -974,6 +974,12 @@ mod tests {
         assert!(PKGDEPENDS_PATCH.contains("xfun_patch_p3m_downloads <- function"));
         assert!(PKGDEPENDS_PATCH.contains("original_download_tarball("));
         assert!(PKGDEPENDS_PATCH.contains(") & !file.exists(expected)"));
+        assert_eq!(
+            PKGDEPENDS_PATCH
+                .matches("P3M request budget reached; resuming downloads in %.0f seconds.")
+                .count(),
+            2
+        );
     }
 
     #[test]

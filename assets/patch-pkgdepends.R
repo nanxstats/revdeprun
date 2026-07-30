@@ -246,6 +246,10 @@ pkgdepends_patch_parallel_install <- function(p3m_state_file) {
 
       if (length(p3m_pending) && capacity == 0L) {
         wait <- p3m_rate_limit_wait_seconds(state)
+        cli::cli_alert_info(sprintf(
+          "P3M request budget reached; resuming downloads in %.0f seconds.",
+          ceiling(wait)
+        ))
         return(
           # pkgdepends wraps pkgcache's private delay() as async_delay().
           async_delay(wait)$then(function(value) {
