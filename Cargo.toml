@@ -1,15 +1,15 @@
 [package]
 name = "revdeprun"
-version = "2.2.3"
+version = "2.3.0"
 edition = "2024"
+rust-version = "1.85"
 description = "Easy reverse dependency checks for R with cloud-ready environment setup"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/nanxstats/revdeprun"
-documentation = "https://docs.rs/revdeprun"
+documentation = "https://nanx.me/revdeprun/"
 keywords = ["R-packages", "integration-testing", "reverse-dependency"]
 categories = ["command-line-utilities", "development-tools"]
-rust-version = "1.85"
 authors = ["Nan Xiao <me@nanx.me>"]
 exclude = [
     "AGENTS.md",
