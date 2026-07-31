@@ -1,4 +1,4 @@
-# Guidance for Codex
+# AGENTS.md
 
 This project ships a Rust CLI that provisions R on Ubuntu and automates reverse
 dependency checks for R packages.
