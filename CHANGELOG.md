@@ -1,5 +1,14 @@
 # Changelog
 
+## revdeprun 2.3.1
+
+### Maintenance
+
+- Upgrade reqwest from 0.12 to 0.13.4 and adopt its renamed `rustls` feature,
+  retaining the lean blocking JSON client configuration. Refresh the direct
+  dependency requirements to their latest stable, Rust 1.85 compatible
+  releases (#171).
+
 ## revdeprun 2.3.0
 
 ### New features
