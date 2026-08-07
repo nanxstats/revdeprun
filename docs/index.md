@@ -4,6 +4,10 @@ icon: lucide/house
 
 # revdeprun
 
+[![crates.io version](https://img.shields.io/crates/v/revdeprun)](https://crates.io/crates/revdeprun)
+[![CI tests](https://github.com/nanxstats/revdeprun/actions/workflows/ci.yml/badge.svg)](https://github.com/nanxstats/revdeprun/actions/workflows/ci.yml)
+[![Documentation](https://github.com/nanxstats/revdeprun/actions/workflows/docs.yml/badge.svg)](https://nanx.me/revdeprun/)
+
 revdeprun is a Rust CLI that provisions R on Ubuntu and runs reverse dependency
 checks for an R package in one command. It is usable by anyone and designed
 for cloud instances: fast, reproducible, and disposable.

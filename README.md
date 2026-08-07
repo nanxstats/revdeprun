@@ -3,8 +3,6 @@
 [![crates.io version](https://img.shields.io/crates/v/revdeprun)](https://crates.io/crates/revdeprun)
 [![CI tests](https://github.com/nanxstats/revdeprun/actions/workflows/ci.yml/badge.svg)](https://github.com/nanxstats/revdeprun/actions/workflows/ci.yml)
 [![Documentation](https://github.com/nanxstats/revdeprun/actions/workflows/docs.yml/badge.svg)](https://nanx.me/revdeprun/)
-[![docs.rs](https://img.shields.io/docsrs/revdeprun?label=docs.rs)](https://docs.rs/revdeprun/latest/revdeprun/)
-![License](https://img.shields.io/crates/l/revdeprun)
 
 A command-line tool that automates reverse dependency checking for R packages.
 Provision R on Ubuntu, install system dependencies, preinstall revdep
@@ -194,4 +192,4 @@ The following diagrams illustrate the `revdeprun` workflow.
 
 ## License
 
-This project is licensed under the MIT License.
+MIT
