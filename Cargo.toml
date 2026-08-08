@@ -1,6 +1,6 @@
 [package]
 name = "revdeprun"
-version = "2.3.1"
+version = "2.3.2"
 edition = "2024"
 rust-version = "1.85"
 description = "Easy reverse dependency checks for R with cloud-ready environment setup"
