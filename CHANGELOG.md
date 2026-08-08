@@ -1,5 +1,15 @@
 # Changelog
 
+## revdeprun 2.3.2
+
+### Documentation
+
+- Add crates.io, CI, and documentation badges to the documentation site landing page (#174).
+
+### Maintenance
+
+- Refresh locked transitive dependencies, including aws-lc, clap, and ipnet (#176).
+
 ## revdeprun 2.3.1
 
 ### Maintenance
