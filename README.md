@@ -15,11 +15,15 @@ runs without tedious manual setup.
 
 ### Prerequisites
 
-Install Rust:
+Install Rust and load its environment into the current shell:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
 ```
+
+The `source` command adds Cargo's default binary directory, `$HOME/.cargo/bin`,
+to `PATH` immediately in Bash or Zsh, so you can continue in the same terminal.
 
 Install C compiler and linker:
 
@@ -41,8 +45,12 @@ From GitHub (latest development version):
 cargo install --git https://github.com/nanxstats/revdeprun.git
 ```
 
-**Note**: If `cargo` or `revdeprun` is not found immediately after installation,
-restart your shell.
+With the default Cargo installation, `revdeprun` is installed in the same
+directory already added to `PATH`. Verify it is available in your current shell:
+
+```bash
+revdeprun --version
+```
 
 ## Environment
 
@@ -171,12 +179,35 @@ and uses the first compatible installer returned by the API.
 
 ## Monitor long-running checks
 
-Reverse dependency checks can take hours to complete. If you are monitoring
-progress via an SSH session from your local machine, consider preventing
-your computer from sleeping to maintain an uninterrupted connection and
-keep progress output streaming continuously to your terminal.
-On macOS, open a new terminal window and run `caffeinate -d`. On Windows, use
-[PowerToys Awake](https://learn.microsoft.com/en-us/windows/powertoys/awake).
+Reverse dependency checks can take hours to complete. Run them inside
+[tmux](https://github.com/tmux/tmux/wiki/Getting-Started) on the remote Ubuntu
+instance so they keep running if your SSH connection drops or your local
+computer sleeps.
+
+After connecting over SSH, install tmux and create a named session on the
+remote instance:
+
+```bash
+sudo apt-get update && sudo apt-get install -y tmux
+tmux new-session -s revdeprun
+```
+
+Inside that session, start your check:
+
+```bash
+revdeprun https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
+```
+
+To detach while checks continue, press **Ctrl+b**, release both keys, then
+press **d**. You can now disconnect from SSH. After reconnecting to the same
+instance as the same user, reattach to see progress:
+
+```bash
+tmux attach-session -t revdeprun
+```
+
+Keep the remote instance running until checks finish. A tmux session does not
+survive a reboot or instance shutdown.
 
 ## Technical workflow
 

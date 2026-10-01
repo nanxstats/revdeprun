@@ -1,5 +1,14 @@
 # Changelog
 
+## revdeprun (development version)
+
+### Documentation
+
+- Replace local sleep prevention advice with a remote tmux workflow for
+  starting, detaching from, and reattaching to long-running checks (#178).
+- Load Rust's environment after installation so `cargo` and `revdeprun` are
+  available in the current terminal without restarting the shell (#179).
+
 ## revdeprun 2.3.2
 
 ### Documentation
