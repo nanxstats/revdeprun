@@ -14,14 +14,28 @@ for cloud instances: fast, reproducible, and disposable.
 
 ## Quick start
 
-On a fresh Ubuntu LTS cloud instance:
+After connecting to a fresh Ubuntu LTS cloud instance over SSH, install the
+tools and start a tmux session so checks can continue after you disconnect:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-sudo apt-get update && sudo apt-get install -y build-essential
+source "$HOME/.cargo/env"
+sudo apt-get update && sudo apt-get install -y build-essential tmux
 cargo install revdeprun
+tmux new-session -s revdeprun
+```
+
+Inside the tmux session, start your check:
+
+```bash
 revdeprun https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
 ```
+
+Detach with **Ctrl+b**, release both keys, then press **d**. After reconnecting
+over SSH to the same instance as the same user, run
+`tmux attach-session -t revdeprun` to return. See
+[Monitor long-running checks](guide/cli.md#monitor-long-running-checks)
+for details.
 
 ## Why revdeprun?
 

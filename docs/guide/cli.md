@@ -51,6 +51,38 @@ revdeprun ~/packages/ggsci_4.0.0.tar.gz
 
 The tarball is extracted into the workspace temp directory and used from there.
 
+## Monitor long-running checks
+
+Reverse dependency checks can take hours to complete. Run them inside
+[tmux](https://github.com/tmux/tmux/wiki/Getting-Started) on the remote Ubuntu
+instance so they keep running if your SSH connection drops or your local
+computer sleeps.
+
+After connecting over SSH, install tmux and create a named session on the
+remote instance:
+
+```bash
+sudo apt-get update && sudo apt-get install -y tmux
+tmux new-session -s revdeprun
+```
+
+Inside that session, start your check:
+
+```bash
+revdeprun https://github.com/nanxstats/ggsci.git
+```
+
+To detach while checks continue, press **Ctrl+b**, release both keys, then
+press **d**. You can now disconnect from SSH. After reconnecting to the same
+instance as the same user, reattach to see progress:
+
+```bash
+tmux attach-session -t revdeprun
+```
+
+Keep the remote instance running until checks finish. A tmux session does not
+survive a reboot or instance shutdown.
+
 ## Minimal, intentional repository edits
 
 revdeprun tries hard not to modify the (local) source package. Two exceptions:
