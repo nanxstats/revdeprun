@@ -19,7 +19,7 @@ entire reverse dependency set up front, then install them in bulk.
 3. The script prints a JSON payload (install scripts + post-install hooks).
 4. Rust parses the JSON and executes each command with `sudo`.
 
-See `src/sysreqs.rs`.
+See `assets/r/sysreqs.R` for the R side and `src/sysreqs.rs` for the Rust side.
 
 ## Why this matters
 

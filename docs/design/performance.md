@@ -88,6 +88,6 @@ of packages, two effects show up:
   between polls.
 - Dependency bookkeeping can become expensive for very large plans.
 
-`assets/patch-pkgdepends.R` patches the scheduler to refill the worker pool
+`assets/r/patch-pkgdepends.R` patches the scheduler to refill the worker pool
 more aggressively and avoid unnecessary work.
 The monkey patch is applied before calling `pak::pkg_install()`.
