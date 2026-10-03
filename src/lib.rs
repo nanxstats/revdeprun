@@ -12,6 +12,7 @@ use xshell::Shell;
 pub mod cli;
 mod progress;
 mod r_install;
+mod r_scripts;
 mod r_version;
 mod revdep;
 mod sysreqs;
