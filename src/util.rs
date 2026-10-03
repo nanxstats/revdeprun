@@ -46,6 +46,28 @@ pub fn guess_repo_name(spec: &str) -> Option<String> {
     }
 }
 
+/// Quotes `value` for use as a single word in a POSIX shell command.
+///
+/// Values made only of safe characters are returned unchanged; anything else
+/// is wrapped in single quotes with embedded single quotes escaped.
+///
+/// # Examples
+///
+/// ```
+/// use revdeprun::util::shell_quote;
+///
+/// assert_eq!(shell_quote("/home/ubuntu/pkg-revdep.tar.zst"), "/home/ubuntu/pkg-revdep.tar.zst");
+/// assert_eq!(shell_quote("/data/my pkg"), "'/data/my pkg'");
+/// ```
+pub fn shell_quote(value: &str) -> String {
+    let is_safe = |ch: char| ch.is_ascii_alphanumeric() || "-_./:@%+=,".contains(ch);
+    if !value.is_empty() && value.chars().all(is_safe) {
+        value.to_owned()
+    } else {
+        format!("'{}'", value.replace('\'', r"'\''"))
+    }
+}
+
 /// Emits stdout/stderr captured from a command to the progress renderer.
 pub fn emit_command_output(progress: &Progress, label: &str, stdout: &[u8], stderr: &[u8]) {
     emit_stream(progress, label, "stdout", stdout);
@@ -109,5 +131,16 @@ mod tests {
         assert_eq!(optimal_max_connections(384), 1280);
         assert_eq!(optimal_max_connections(1024), 3200);
         assert_eq!(optimal_max_connections(2000), 4096);
+    }
+
+    #[test]
+    fn quotes_shell_words_only_when_needed() {
+        assert_eq!(shell_quote("plain-word_1.0"), "plain-word_1.0");
+        assert_eq!(shell_quote("user@host:/a/b"), "user@host:/a/b");
+        assert_eq!(shell_quote(""), "''");
+        assert_eq!(shell_quote("has space"), "'has space'");
+        assert_eq!(shell_quote("~/pkg"), "'~/pkg'");
+        assert_eq!(shell_quote("O'Reilly"), r"'O'\''Reilly'");
+        assert_eq!(shell_quote("$HOME/x"), "'$HOME/x'");
     }
 }
