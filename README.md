@@ -243,6 +243,9 @@ scp ubuntu@HOST:/home/ubuntu/YOUR-REPOSITORY-revdep.tar.zst .
 tar -xf YOUR-REPOSITORY-revdep.tar.zst
 ```
 
+The summary and transfer commands are printed to stderr, including in
+noninteractive SSH sessions and when stderr is redirected to a log file.
+
 revdeprun fills in the user name, the absolute path, and the instance address
 when the SSH session exposes a public one; otherwise replace `HOST` with the
 address you connect to. Both GNU tar (1.31 or later) and macOS `tar` extract
@@ -250,8 +253,10 @@ address you connect to. Both GNU tar (1.31 or later) and macOS `tar` extract
 fails (`brew install zstd` on macOS, `sudo apt-get install zstd` on Ubuntu).
 The archive extracts into a single directory named after the bundle file.
 
-Use `--output` to choose a different file name or directory. The command refuses
-to overwrite an existing file, and it exits with an error when the package
+Use `--output` to choose a different file name or directory outside the
+`*.Rcheck/` and `*.Rcheck2/` directories being bundled. The command refuses
+output locations inside those directories, including through symlinks, and
+refuses to overwrite an existing file. It exits with an error when the package
 directory contains no results, which is the case when the check found no
 problems to review.
 

@@ -49,6 +49,12 @@ scp ubuntu@HOST:/home/ubuntu/ggsci-revdep.tar.zst .
 tar -xf ggsci-revdep.tar.zst
 ```
 
+The summary and transfer commands are printed to stderr, including in
+noninteractive SSH sessions and when stderr is redirected to a log file.
+Use `--output` to choose a different file name or directory outside the
+`*.Rcheck/` and `*.Rcheck2/` directories being bundled. Output locations inside
+those directories are rejected, including through symlinks.
+
 revdeprun fills in the user name, the absolute path, and the instance address
 when the SSH session exposes a public one; otherwise replace `HOST` with the
 address you connect to. The archive extracts into a single directory named after

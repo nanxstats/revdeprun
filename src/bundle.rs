@@ -265,7 +265,8 @@ fn archive_prefix(output: &Path, package_name: &str) -> String {
 ///
 /// The archive is assembled in a temporary file next to `output` and moved
 /// into place only once it is complete, so a failure never leaves a partial
-/// bundle behind.
+/// bundle behind. The output directory must be outside the collected check
+/// directories so traversal cannot pick up the growing temporary file.
 fn write_bundle(
     package_dir: &Path,
     artifacts: &[Artifact],
@@ -277,7 +278,23 @@ fn write_bundle(
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
-    let temp = bundle_tempfile(parent)
+    let parent = workspace::canonicalized(parent)
+        .with_context(|| format!("failed to resolve output directory {}", parent.display()))?;
+    // Resolve both sides so symlink aliases and `..` cannot bypass this check.
+    for artifact in artifacts {
+        if let Artifact::CheckDir(name) = artifact {
+            let source = workspace::canonicalized(&package_dir.join(name))?;
+            if parent.starts_with(&source) {
+                bail!(
+                    "output directory {} is inside check results directory {}; \
+                     choose an --output outside the check result directories",
+                    parent.display(),
+                    source.display()
+                );
+            }
+        }
+    }
+    let temp = bundle_tempfile(&parent)
         .with_context(|| format!("failed to create a temporary file in {}", parent.display()))?;
 
     let mut stats = BundleStats::default();
@@ -772,6 +789,90 @@ mod tests {
             .collect();
         siblings.sort();
         assert_eq!(siblings, ["ggsci", "ggsci-revdep.tar.zst"]);
+    }
+
+    #[test]
+    fn rejects_output_inside_check_directories() {
+        let tmp = tempdir().expect("tempdir");
+        let pkg = sample_package_dir(tmp.path());
+        let artifacts = collect_artifacts(&pkg).expect("artifacts");
+
+        for relative in [
+            "alpha.Rcheck/results.tar.zst",
+            "alpha.Rcheck/tests/results.tar.zst",
+            "alpha.Rcheck2/results.tar.zst",
+            "alpha.Rcheck/tests/../results.tar.zst",
+        ] {
+            let output = pkg.join(relative);
+            let parent = output.parent().expect("parent");
+            let entries_before = fs::read_dir(parent).expect("read parent").count();
+            let err = write_bundle(&pkg, &artifacts, &output, "results", 1)
+                .expect_err("output inside check results must fail");
+
+            assert!(
+                err.to_string().contains("inside check results directory"),
+                "{err:#}"
+            );
+            assert!(!output.exists());
+            assert_eq!(
+                fs::read_dir(parent).expect("read parent").count(),
+                entries_before
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_output_through_symlinked_directories() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = tempdir().expect("tempdir");
+        let pkg = sample_package_dir(tmp.path());
+        let output_alias = tmp.path().join("output-alias");
+        symlink(pkg.join("alpha.Rcheck/tests"), &output_alias).expect("output symlink");
+
+        let external = tmp.path().join("external");
+        fs::create_dir(&external).expect("external directory");
+        symlink(&external, pkg.join("external.Rcheck")).expect("artifact symlink");
+        let artifacts = collect_artifacts(&pkg).expect("artifacts");
+
+        for parent in [output_alias, external] {
+            let output = parent.join("results.tar.zst");
+            let entries_before = fs::read_dir(&parent).expect("read parent").count();
+            let err = write_bundle(&pkg, &artifacts, &output, "results", 1)
+                .expect_err("symlinked output inside check results must fail");
+
+            assert!(
+                err.to_string().contains("inside check results directory"),
+                "{err:#}"
+            );
+            assert!(!output.exists());
+            assert_eq!(
+                fs::read_dir(&parent).expect("read parent").count(),
+                entries_before
+            );
+        }
+    }
+
+    #[test]
+    fn writes_bundle_inside_package_outside_check_directories() {
+        let tmp = tempdir().expect("tempdir");
+        let pkg = sample_package_dir(tmp.path());
+        fs::create_dir(pkg.join("alpha.Rcheck-backup")).expect("non-result directory");
+        let artifacts = collect_artifacts(&pkg).expect("artifacts");
+
+        for relative in [
+            "results.tar.zst",
+            "alpha.Rcheck-backup/results.tar.zst",
+            "alpha.Rcheck/tests/../../normalized.tar.zst",
+        ] {
+            let output = pkg.join(relative);
+            let stats = write_bundle(&pkg, &artifacts, &output, "results", 1)
+                .expect("output outside check directories");
+
+            assert_eq!(stats.files, 7);
+            assert_eq!(read_bundle(&output).len(), 14);
+        }
     }
 
     #[test]

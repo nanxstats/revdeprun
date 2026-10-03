@@ -101,9 +101,11 @@ revdeprun bundle [OPTIONS] [PACKAGE_DIR]
 The subcommand collects the files `xfun::rev_check()` left behind for review
 (`00check_diffs.md`, `00check_diffs.html`, `*.Rcheck/`, and `*.Rcheck2/`) into
 one zstd-compressed tar archive and prints the `scp` and `tar` commands for
-copying and extracting it. It refuses to overwrite an existing file and exits
-with an error when the directory contains no results. Point it at the package
-directory printed at the end of the check:
+copying and extracting it. The summary and commands are printed to stderr even
+without a terminal. The output must be outside the check result directories,
+including their symlink aliases. It refuses to overwrite an existing file and
+exits with an error when the directory contains no results. Point it at the
+package directory printed at the end of the check:
 
 ```bash
 revdeprun bundle ggsci

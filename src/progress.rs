@@ -1,3 +1,4 @@
+use std::io::{self, Write};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -45,11 +46,15 @@ impl Progress {
         }
     }
 
-    /// Prints a standalone message, respecting the progress draw target.
+    /// Prints a standalone message to stderr, including without a terminal.
     pub fn println(&self, message: impl AsRef<str>) {
         let message = message.as_ref();
-        // Ensure progress bars are temporarily suspended to avoid interleaving.
-        let _ = self.multi.println(message);
+        if self.multi.is_hidden() {
+            // Hidden progress targets discard messages as well as progress bars.
+            let _ = writeln!(io::stderr().lock(), "{message}");
+        } else {
+            let _ = self.multi.println(message);
+        }
     }
 
     /// Executes a closure while temporarily suspending drawing.
