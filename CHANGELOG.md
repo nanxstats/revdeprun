@@ -10,15 +10,6 @@
     single zstd-compressed tar archive, so they can be moved off a cloud
     instance for review as soon as the check finishes.
 
-### Bug fixes
-
-- Reject bundle output locations inside collected check result directories,
-  including symlink aliases, to prevent the archive from including its own
-  growing temporary file (#186).
-- Preserve standalone progress messages on stderr without a terminal,
-  including the bundle summary and transfer commands in noninteractive SSH
-  sessions and redirected logs (#186).
-
 ### Improvements
 
 - Move the R code for system requirement resolution, dependency installation,

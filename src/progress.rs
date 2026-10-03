@@ -48,10 +48,13 @@ impl Progress {
 
     /// Prints a standalone message to stderr, including without a terminal.
     pub fn println(&self, message: impl AsRef<str>) {
-        let message = message.as_ref();
+        self.println_with_fallback(message.as_ref(), io::stderr());
+    }
+
+    fn println_with_fallback(&self, message: &str, mut fallback: impl Write) {
         if self.multi.is_hidden() {
             // Hidden progress targets discard messages as well as progress bars.
-            let _ = writeln!(io::stderr().lock(), "{message}");
+            let _ = writeln!(fallback, "{message}");
         } else {
             let _ = self.multi.println(message);
         }
@@ -98,5 +101,21 @@ impl Drop for Task {
             self.bar
                 .abandon_with_message(format!("{} (cancelled)", self.label));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prints_standalone_messages_when_progress_is_hidden() {
+        let progress = Progress::new();
+        progress.multi.set_draw_target(ProgressDrawTarget::hidden());
+        let mut output = Vec::new();
+
+        progress.println_with_fallback("Bundle ready.\n  tar -xf results.tar.zst", &mut output);
+
+        assert_eq!(output, b"Bundle ready.\n  tar -xf results.tar.zst\n");
     }
 }
