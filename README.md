@@ -98,6 +98,11 @@ Sensible defaults that make this fast and robust:
 
 ```
 Usage: revdeprun [OPTIONS] <REPOSITORY>
+       revdeprun <COMMAND>
+
+Commands:
+  bundle  Bundle check results into a .tar.zst archive for transfer
+  help    Print this message or the help of the given subcommand(s)
 
 Arguments:
   <REPOSITORY>
@@ -208,6 +213,68 @@ tmux attach-session -t revdeprun
 
 Keep the remote instance running until checks finish. A tmux session does not
 survive a reboot or instance shutdown.
+
+## Transfer results
+
+Cloud instances are often billed by the minute, so once a check finishes you
+want the results off the machine quickly. `revdeprun bundle` packs everything
+`xfun::rev_check()` left behind for review into a single zstd-compressed tar
+archive:
+
+- `00check_diffs.md` and `00check_diffs.html`: the summary of check results
+  that differ between the CRAN and development versions of your package.
+- `*.Rcheck/` and `*.Rcheck2/`: `R CMD check` output for each reverse
+  dependency with problems.
+
+The package sources, `revdep/library/`, and downloaded `tarball/` sources are
+left out. Point the subcommand at the package directory printed at the end of
+the check (for a Git URL, that is the clone in your current directory):
+
+```bash
+revdeprun bundle YOUR-REPOSITORY
+```
+
+The bundle is written next to the package directory as
+`<package>-revdep.tar.zst`, and revdeprun prints an `scp` command to paste on
+your local machine, followed by the `tar` command that extracts it:
+
+```bash
+scp ubuntu@HOST:/home/ubuntu/YOUR-REPOSITORY-revdep.tar.zst .
+tar -xf YOUR-REPOSITORY-revdep.tar.zst
+```
+
+The summary and transfer commands are printed to stderr, including in
+noninteractive SSH sessions and when stderr is redirected to a log file.
+
+revdeprun fills in the user name, the absolute path, and the instance address
+when the SSH session exposes a public one; otherwise replace `HOST` with the
+address you connect to. Both GNU tar (1.31 or later) and macOS `tar` extract
+`.tar.zst` archives through the `zstd` command, so install it if extraction
+fails (`brew install zstd` on macOS, `sudo apt-get install zstd` on Ubuntu).
+The archive extracts into a single directory named after the bundle file.
+
+Use `--output` to choose a different file name or directory outside the
+`*.Rcheck/` and `*.Rcheck2/` directories being bundled. The command refuses
+output locations inside those directories, including through symlinks, and
+refuses to overwrite an existing file. It exits with an error when the package
+directory contains no results, which is the case when the check found no
+problems to review.
+
+```
+Usage: revdeprun bundle [OPTIONS] [PACKAGE_DIR]
+
+Arguments:
+  [PACKAGE_DIR]
+          Package directory where xfun::rev_check() ran (contains *.Rcheck/ and 00check_diffs.*)
+          [default: .]
+
+Options:
+  -o, --output <FILE>
+          Output archive path (.tar.zst); an existing directory receives the default file name
+
+  -h, --help
+          Print help
+```
 
 ## Technical workflow
 

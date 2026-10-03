@@ -2,13 +2,15 @@
 //!
 //! The library exposes a single [`run`] function that orchestrates the end-to-end
 //! workflow for provisioning R, preparing the target package repository, and
-//! executing `xfun::rev_check()`.
+//! executing `xfun::rev_check()`, as well as the `bundle` subcommand that packs
+//! the check results for transfer.
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 use progress::Progress;
 use xshell::Shell;
 
+mod bundle;
 pub mod cli;
 mod progress;
 mod r_install;
@@ -24,15 +26,27 @@ mod workspace;
 /// # Errors
 ///
 /// Returns an error whenever preparing the workspace, installing R, cloning the
-/// repository, or launching `xfun::rev_check()` fails.
+/// repository, launching `xfun::rev_check()`, or bundling results fails.
 pub fn run() -> Result<()> {
     let args = cli::Args::parse();
+    let progress = Progress::new();
+
+    match &args.command {
+        Some(cli::Command::Bundle(bundle_args)) => bundle::run(bundle_args, &progress),
+        None => run_check(&args, &progress),
+    }
+}
+
+/// Runs the end-to-end reverse dependency check described by `args`.
+fn run_check(args: &cli::Args, progress: &Progress) -> Result<()> {
+    let Some(repository) = args.repository.as_deref() else {
+        bail!("a repository argument is required; see `revdeprun --help`");
+    };
 
     if std::env::consts::OS != "linux" {
         bail!("revdeprun currently supports Ubuntu Linux environments only.");
     }
 
-    let progress = Progress::new();
     let shell = Shell::new().context("failed to initialize shell environment")?;
 
     let workspace_label = args
@@ -85,13 +99,12 @@ pub fn run() -> Result<()> {
     };
 
     if let Some(version) = resolved_version.as_ref() {
-        r_install::install_r(&shell, version, &progress)
+        r_install::install_r(&shell, version, progress)
             .context("failed to install the requested R toolchain")?;
     }
 
-    let repository_path =
-        revdep::prepare_repository(&shell, &workspace, &args.repository, &progress)
-            .context("failed to prepare target repository")?;
+    let repository_path = revdep::prepare_repository(&shell, &workspace, repository, progress)
+        .context("failed to prepare target repository")?;
 
     let num_workers = args
         .num_workers
@@ -107,11 +120,11 @@ pub fn run() -> Result<()> {
         &workspace,
         &repository_path,
         num_workers,
-        &progress,
+        progress,
     )
     .context("failed to install system requirements for reverse dependencies")?;
 
-    revdep::run_revcheck(&shell, &workspace, &repository_path, num_workers, &progress)
+    revdep::run_revcheck(&shell, &workspace, &repository_path, num_workers, progress)
         .context("reverse dependency check invocation failed")?;
 
     let r_version_summary = resolved_version
@@ -124,8 +137,24 @@ pub fn run() -> Result<()> {
         repository_path.display(),
         revdep::revlib_dir(&repository_path).display()
     ));
+    progress.println(bundle_hint(&repository_path));
 
     Ok(())
+}
+
+/// Tells the user how to transfer the results, or that there is nothing to
+/// transfer because `xfun::rev_check()` reported no differences.
+fn bundle_hint(repository_path: &std::path::Path) -> String {
+    if bundle::has_results(repository_path) {
+        format!(
+            "Bundle the results for transfer to another machine with:\n  revdeprun bundle {}",
+            util::shell_quote(&repository_path.to_string_lossy())
+        )
+    } else {
+        "No check differences were reported: xfun::rev_check() left no *.Rcheck/ directories \
+         or 00check_diffs reports to review."
+            .to_string()
+    }
 }
 
 fn resolve_r_version_if_installing<F>(
@@ -146,6 +175,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::tempdir;
 
     #[test]
     fn skipping_r_install_does_not_resolve_a_version() {
@@ -155,5 +186,19 @@ mod tests {
         .unwrap();
 
         assert!(resolved.is_none());
+    }
+
+    #[test]
+    fn bundle_hint_depends_on_leftover_results() {
+        let tmp = tempdir().expect("tempdir");
+        let pkg = tmp.path().join("my pkg");
+        fs::create_dir_all(pkg.join("revdep/library")).expect("library");
+
+        assert!(bundle_hint(&pkg).starts_with("No check differences were reported"));
+
+        fs::create_dir_all(pkg.join("alpha.Rcheck")).expect("Rcheck dir");
+        let hint = bundle_hint(&pkg);
+        assert!(hint.starts_with("Bundle the results"));
+        assert!(hint.ends_with(&format!("revdeprun bundle '{}'", pkg.display())));
     }
 }
