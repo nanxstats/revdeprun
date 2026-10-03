@@ -7,7 +7,8 @@ dependency checks for R packages.
 
 - `src/lib.rs` exposes `run()`, which wires together argument parsing, workspace
   creation, R toolchain resolution and installation, repository preparation, and
-  the final `xfun::rev_check()` invocation.
+  the final `xfun::rev_check()` invocation, or dispatches to the `bundle`
+  subcommand.
 - `src/cli.rs` uses `clap` for argument parsing. Keep the CLI surface lean; new
   flags require corresponding documentation updates.
 - `src/r_version.rs` talks to `https://api.r-hub.io/rversions/resolve`. Changes
@@ -29,6 +30,10 @@ dependency checks for R packages.
   orchestration stay in Rust. Do not introduce a templating engine or
   placeholders in the R sources. Each `.R` file documents the configuration
   variables it expects in its header comment.
+- `src/bundle.rs` implements `revdeprun bundle`: it discovers the files that
+  `xfun::rev_check()` leaves in the package directory (`00check_diffs.md`,
+  `00check_diffs.html`, `*.Rcheck/`, `*.Rcheck2/`) and writes them into a
+  `.tar.zst` archive with the `tar` and `zstd` crates.
 - `src/workspace.rs` manages workspace directories. Remote clones default to
   `<repo>` alongside the current working directory, while temporary files live
   under `revdeprun-work/`. Respect user-provided workspaces without deleting

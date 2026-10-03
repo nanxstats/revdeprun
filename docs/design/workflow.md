@@ -80,6 +80,32 @@ The two key pieces are:
 - `src/revdep.rs`: assemble deterministic R scripts to install dependencies and
   run `xfun::rev_check()`.
 
+## Bundling results
+
+`revdeprun bundle` is a separate subcommand rather than a step of the check, so
+you can run it after reading the summary and skip it when there is nothing to
+review. It lives in `src/bundle.rs` and targets exactly the files that
+`xfun::rev_check()` leaves in the package directory, as read from the xfun
+sources (`R/revcheck.R`):
+
+- `00check_diffs.md` and `00check_diffs.html`, written by `xfun::compare_Rcheck()`.
+- `*.Rcheck/`: `R CMD check` output against the CRAN version of the package.
+- `*.Rcheck2/`: the same check against the development version.
+
+Successful checks delete their `*.Rcheck` directory, so these only exist for
+reverse dependencies with problems. The package sources, `revdep/library/`,
+the `tarball/` download cache, and the transient `library-cran/` are never
+bundled.
+
+The archive is a zstd-compressed tar stream written with the `tar` and `zstd`
+crates, so the instance needs no extra tools. Entries are added in sorted order
+under a single top-level directory named after the bundle file, compression uses
+all available cores, and the archive is assembled in a temporary file that is
+moved into place only once complete, so a failure never leaves a partial bundle.
+The completion message includes an `scp` command. The instance address is taken
+from `SSH_CONNECTION` when it is a public IP; otherwise a `HOST` placeholder is
+printed, because instances behind NAT only see their private address.
+
 ## Script assembly
 
 The R code that revdeprun runs lives in plain `.R` files under `assets/r/`
