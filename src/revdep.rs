@@ -10,15 +10,12 @@ use xshell::{Shell, cmd};
 
 use crate::{
     progress::Progress,
+    r_scripts::{self, RConfig},
     util,
     workspace::{self, Workspace},
 };
 
 const PKGDEPENDS_PATCH_FILENAME: &str = "patch-pkgdepends.R";
-const PKGDEPENDS_PATCH: &str = include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/assets/patch-pkgdepends.R"
-));
 const REVDEP_RBUILDIGNORE_LINE: &str = "^revdep$";
 
 /// Ensures a checkout of the target repository exists within the configured
@@ -362,14 +359,14 @@ pub fn run_revcheck(
         &codename,
         &pkgdepends_patch_path,
         &p3m_state_path,
-    )?;
+    );
     let run_contents = build_revdep_run_script(
         repo_path,
         num_workers,
         max_connections,
         &pkgdepends_patch_path,
         &p3m_state_path,
-    )?;
+    );
 
     let mut install_script = NamedTempFile::new_in(workspace.temp_dir())
         .context("failed to create temporary R script file")?;
@@ -432,6 +429,8 @@ pub fn revlib_dir(repo_path: &Path) -> PathBuf {
     repo_path.join("revdep")
 }
 
+/// Assembles the dependency installation script from the shared prelude and
+/// `assets/r/revdep-install.R`.
 fn build_revdep_install_script(
     repo_path: &Path,
     num_workers: usize,
@@ -439,157 +438,32 @@ fn build_revdep_install_script(
     codename: &str,
     pkgdepends_patch_path: &Path,
     p3m_state_path: &Path,
-) -> Result<String> {
-    let prelude = script_prelude(
+) -> String {
+    let config = script_config(
         repo_path,
         num_workers,
         max_connections,
         pkgdepends_patch_path,
         p3m_state_path,
-    );
-    let codename_literal = util::r_string_literal(&codename.to_lowercase());
+    )
+    .string("ubuntu_codename", &codename.to_lowercase());
 
-    let script = format!(
-        r#"{prelude}
-
-# Configure repositories ----
-binary_repo <- sprintf("https://packagemanager.posit.co/cran/__linux__/%s/latest", {codename_literal})
-source_repo <- "https://packagemanager.posit.co/cran/latest"
-
-# Configure install options ----
-options(
-  repos = c(CRAN = binary_repo, posit = binary_repo),
-  BioC_mirror = "https://packagemanager.posit.co/bioconductor",
-  Ncpus = install_workers
-)
-Sys.setenv(NOT_CRAN = "true")
-
-# Ensure pak is available ----
-ensure_pak(source_repo)
-
-# Apply pkgdepends parallel patch ----
-source(pkgdepends_patch_path)
-pak_patch_parallel_install(pkgdepends_patch_path, p3m_state_path)
-
-# Ensure tooling prerequisites ----
-ensure_installed("xfun")
-
-# Inform user about dependency resolution work ----
-message("Parsing package metadata and dependency lists...\nThis can take a few minutes for large revdep sets.")
-
-# DESCRIPTION parsing helpers ----
-strip_version <- function(entries) {{
-  entries <- gsub("\\s*\\(.*?\\)", "", entries)
-  trimws(entries)
-}}
-
-parse_description_dependencies <- function(desc_path, fields) {{
-  if (!file.exists(desc_path)) {{
-    return(character())
-  }}
-  desc <- read.dcf(desc_path, fields = fields)
-  if (!nrow(desc)) {{
-    return(character())
-  }}
-  deps <- character()
-  for (field in intersect(fields, colnames(desc))) {{
-    value <- desc[1, field]
-    if (length(value) && !is.na(value) && nzchar(value)) {{
-      entries <- unlist(strsplit(value, ',', fixed = TRUE), use.names = FALSE)
-      entries <- strip_version(entries)
-      entries <- entries[nzchar(entries) & entries != 'R']
-      deps <- c(deps, entries)
-    }}
-  }}
-  sort(unique(deps))
-}}
-
-# Gather package metadata ----
-package_name <- read.dcf("DESCRIPTION", fields = "Package")[1, 1]
-if (!nzchar(package_name)) {{
-  stop("Failed to read package name from DESCRIPTION")
-}}
-
-db <- available.packages(repos = source_repo, type = "source")
-revdeps <- tools::package_dependencies(
-  packages = package_name,
-  db = db,
-  which = c("Depends", "Imports", "LinkingTo", "Suggests"),
-  reverse = TRUE
-)[[package_name]]
-
-revdeps <- sort(unique(stats::na.omit(revdeps)))
-
-base_pkgs <- unique(c(.BaseNamespaceEnv$basePackage, rownames(installed.packages(priority = "base"))))
-revdeps <- setdiff(revdeps, base_pkgs)
-
-# Determine installation targets ----
-dependency_kinds <- c("Depends", "Imports", "LinkingTo", "Suggests")
-cran_package_deps <- tools::package_dependencies(
-  packages = package_name,
-  db = db,
-  which = dependency_kinds,
-  reverse = FALSE
-)[[package_name]]
-cran_package_deps <- cran_package_deps[!is.na(cran_package_deps) & nzchar(cran_package_deps)]
-cran_package_deps <- setdiff(cran_package_deps, base_pkgs)
-
-dev_package_deps <- parse_description_dependencies("DESCRIPTION", dependency_kinds)
-dev_package_deps <- setdiff(dev_package_deps, base_pkgs)
-
-install_targets <- sort(unique(c(package_name, dev_package_deps, cran_package_deps, revdeps)))
-
-available_packages <- rownames(db)
-missing_packages <- setdiff(install_targets, available_packages)
-if (length(missing_packages) > 0) {{
-  message(
-    "Skipping packages not available from repository: ",
-    paste(missing_packages, collapse = ", ")
-  )
-}}
-install_targets <- setdiff(install_targets, missing_packages)
-install_targets <- setdiff(install_targets, base_pkgs)
-
-dependency_map <- tools::package_dependencies(
-  packages = install_targets,
-  db = db,
-  which = dependency_kinds,
-  recursive = FALSE
-)
-extra_deps <- unique(unlist(dependency_map, use.names = FALSE))
-extra_deps <- extra_deps[!is.na(extra_deps) & nzchar(extra_deps)]
-extra_deps <- intersect(extra_deps, available_packages)
-extra_deps <- setdiff(extra_deps, c(base_pkgs, install_targets))
-install_targets <- sort(unique(c(install_targets, extra_deps)))
-
-if (length(revdeps) == 0) {{
-  message("No CRAN reverse dependencies detected; installing package binary only.")
-}}
-
-# Install packages ----
-if (length(install_targets) > 0) {{
-  message(sprintf(
-    "Installing %d packages with pak::pkg_install()...",
-    length(install_targets)
-  ))
-  pak_install_retry(install_targets)
-}} else {{
-  stop("No installation targets determined for pak::pkg_install().")
-}}
-"#
-    );
-
-    Ok(script)
+    r_scripts::assemble(
+        &config,
+        &[r_scripts::REVDEP_PRELUDE, r_scripts::REVDEP_INSTALL],
+    )
 }
 
+/// Assembles the `xfun::rev_check()` script from the shared prelude and
+/// `assets/r/revdep-run.R`.
 fn build_revdep_run_script(
     repo_path: &Path,
     num_workers: usize,
     max_connections: usize,
     pkgdepends_patch_path: &Path,
     p3m_state_path: &Path,
-) -> Result<String> {
-    let prelude = script_prelude(
+) -> String {
+    let config = script_config(
         repo_path,
         num_workers,
         max_connections,
@@ -597,186 +471,32 @@ fn build_revdep_run_script(
         p3m_state_path,
     );
 
-    let script = format!(
-        r#"{prelude}
-
-# Configure repositories ----
-source_repo <- "https://packagemanager.posit.co/cran/latest"
-
-# Configure runtime options ----
-options(
-  repos = c(CRAN = source_repo),
-  BioC_mirror = "https://packagemanager.posit.co/bioconductor",
-  Ncpus = install_workers,
-  mc.cores = install_workers
-)
-Sys.setenv(NOT_CRAN = "true")
-
-# Ensure pak is available ----
-ensure_pak(source_repo)
-
-# Apply pkgdepends parallel patch ----
-source(pkgdepends_patch_path)
-pak_patch_parallel_install(pkgdepends_patch_path, p3m_state_path)
-
-# Ensure runtime prerequisites ----
-ensure_installed("xfun")
-ensure_installed("markdown")
-ensure_installed("rmarkdown")
-
-# Apply P3M rate limiting to xfun source downloads ----
-xfun_patch_p3m_downloads(p3m_state_path)
-
-# Configure xfun::rev_check() options ----
-options(
-  browser = "false",
-  install.packages.compile.from.source = "always",
-  xfun.rev_check.compare = TRUE,
-  xfun.rev_check.download_cores = 50,
-  xfun.rev_check.timeout = 30 * 60,
-  xfun.rev_check.summary = TRUE,
-  xfun.rev_check.sample = Inf,
-  xfun.rev_check.keep_md = TRUE,
-  xfun.rev_check.timeout_total = Inf
-)
-
-package_name <- read.dcf("DESCRIPTION", fields = "Package")[1, 1]
-if (!nzchar(package_name)) {{
-  stop("Failed to read package name from DESCRIPTION")
-}}
-
-# Run xfun::rev_check() ----
-results <- xfun::rev_check(package_name, src = ".")
-invisible(results)
-"#
-    );
-
-    Ok(script)
+    r_scripts::assemble(&config, &[r_scripts::REVDEP_PRELUDE, r_scripts::REVDEP_RUN])
 }
 
-fn script_prelude(
+/// Builds the configuration block consumed by `assets/r/revdep-prelude.R`.
+///
+/// The install and run scripts must receive the same `p3m_state_path` so that
+/// pak binary downloads and xfun source downloads draw from one shared P3M
+/// request budget.
+fn script_config(
     repo_path: &Path,
     num_workers: usize,
     max_connections: usize,
     pkgdepends_patch_path: &Path,
     p3m_state_path: &Path,
-) -> String {
-    let path_literal = util::r_string_literal(&repo_path.to_string_lossy());
-    let pkgdepends_patch_literal = util::r_string_literal(&pkgdepends_patch_path.to_string_lossy());
-    let p3m_state_literal = util::r_string_literal(&p3m_state_path.to_string_lossy());
-    let workers = num_workers.max(1);
-    let max_connections = max_connections.max(1);
-
-    format!(
-        r#"
-# Prepare workspace directories ----
-setwd({path_literal})
-
-revdep_dir <- file.path(getwd(), "revdep")
-dir.create(revdep_dir, recursive = TRUE, showWarnings = FALSE)
-revdep_dir <- normalizePath(revdep_dir, winslash = "/", mustWork = TRUE)
-
-# Configure library paths ----
-library_dir <- file.path(revdep_dir, "library")
-dir.create(library_dir, recursive = TRUE, showWarnings = FALSE)
-library_dir <- normalizePath(library_dir, winslash = "/", mustWork = TRUE)
-
-Sys.setenv(R_LIBS_USER = library_dir)
-.libPaths(unique(c(library_dir, .libPaths())))
-
-# Configure parallelism ----
-install_workers <- {workers}
-options(Ncpus = install_workers)
-
-# Configure pak/pkgcache async HTTP concurrency for binary downloads ----
-options(
-  async_http_total_con = {max_connections},
-  async_http_host_con = 50
-)
-
-# Configure pkgdepends patch ----
-pkgdepends_patch_path <- {pkgdepends_patch_literal}
-pkgdepends_patch_path <- normalizePath(pkgdepends_patch_path, winslash = "/", mustWork = TRUE)
-p3m_state_path <- {p3m_state_literal}
-p3m_state_path <- normalizePath(p3m_state_path, winslash = "/", mustWork = TRUE)
-
-# Helpers for package installation ----
-pak_install_retry <- function(pkgs, attempts = 5) {{
-  pkgs <- as.character(pkgs)
-  pkgs <- pkgs[!is.na(pkgs) & nzchar(pkgs)]
-  if (!length(pkgs)) {{
-    return(invisible(TRUE))
-  }}
-
-  install_pkgs <- vapply(
-    pkgs,
-    function(pkg) {{
-      if (grepl("\\?", pkg)) {{
-        pkg
-      }} else {{
-        paste0(pkg, "?ignore-build-errors&ignore-unavailable")
-      }}
-    }},
-    FUN.VALUE = character(1),
-    USE.NAMES = FALSE
-  )
-
-  for (attempt in seq_len(attempts)) {{
-    tryCatch(
-      {{
-        pak::pkg_install(
-          install_pkgs,
-          lib = library_dir,
-          upgrade = FALSE,
-          ask = FALSE,
-          dependencies = NA
-        )
-        return(invisible(TRUE))
-      }},
-      error = function(err) {{
-        if (attempt < attempts) {{
-          message(
-            sprintf(
-              "pak::pkg_install failed (%d/%d) for %s: %s; retrying...",
-              attempt,
-              attempts,
-              paste(pkgs, collapse = ', '),
-              conditionMessage(err)
-            )
-          )
-          Sys.sleep(3)
-        }} else {{
-          stop(err)
-        }}
-      }}
-    )
-  }}
-}}
-
-ensure_pak <- function(repo) {{
-  if (!requireNamespace("pak", quietly = TRUE)) {{
-    install.packages(
-      "pak",
-      repos = repo,
-      lib = library_dir,
-      quiet = TRUE,
-      Ncpus = install_workers
-    )
-  }}
-}}
-
-ensure_installed <- function(pkg) {{
-  if (!requireNamespace(pkg, quietly = TRUE)) {{
-    pak_install_retry(pkg)
-  }}
-}}
-"#
-    )
+) -> RConfig {
+    RConfig::new()
+        .path("repo_path", repo_path)
+        .integer("install_workers", num_workers.max(1))
+        .integer("max_connections", max_connections.max(1))
+        .path("pkgdepends_patch_path", pkgdepends_patch_path)
+        .path("p3m_state_path", p3m_state_path)
 }
 
 fn write_pkgdepends_patch(workspace: &Workspace) -> Result<PathBuf> {
     let patch_path = workspace.temp_dir().join(PKGDEPENDS_PATCH_FILENAME);
-    fs::write(&patch_path, PKGDEPENDS_PATCH).with_context(|| {
+    fs::write(&patch_path, r_scripts::PKGDEPENDS_PATCH).with_context(|| {
         format!(
             "failed to write pkgdepends patch to {}",
             patch_path.display()
@@ -847,24 +567,50 @@ mod tests {
     use tempfile::tempdir;
     use xshell::Shell;
 
+    const CONFIG_HEADER: &str = "# Configuration generated by revdeprun ----\n";
+
+    /// Returns the byte offset of `needle` in `script`, failing if absent.
+    fn position(script: &str, needle: &str) -> usize {
+        script
+            .find(needle)
+            .unwrap_or_else(|| panic!("script does not contain {needle:?}"))
+    }
+
+    fn sample_install_script() -> String {
+        build_revdep_install_script(
+            Path::new("/tmp/example"),
+            8,
+            util::optimal_max_connections(8),
+            "resolute",
+            Path::new("/tmp/patch-pkgdepends.R"),
+            Path::new("/tmp/p3m-rate-limit.rds"),
+        )
+    }
+
+    fn sample_run_script() -> String {
+        build_revdep_run_script(
+            Path::new("/tmp/example"),
+            8,
+            util::optimal_max_connections(8),
+            Path::new("/tmp/patch-pkgdepends.R"),
+            Path::new("/tmp/p3m-rate-limit.rds"),
+        )
+    }
+
     #[test]
     fn build_install_script_uses_binary_repo() {
-        let path = Path::new("/tmp/example");
-        let pkgdepends_patch_path = Path::new("/tmp/patch-pkgdepends.R");
-        let p3m_state_path = Path::new("/tmp/p3m-rate-limit.rds");
         let max_connections = util::optimal_max_connections(8);
-        let script = build_revdep_install_script(
-            path,
-            8,
-            max_connections,
-            "resolute",
-            pkgdepends_patch_path,
-            p3m_state_path,
-        )
-        .expect("script must build");
+        let script = sample_install_script();
+
+        assert!(script.starts_with(CONFIG_HEADER));
+        assert!(script.contains("repo_path <- '/tmp/example'"));
+        assert!(script.contains("install_workers <- 8"));
+        assert!(script.contains(&format!("max_connections <- {max_connections}")));
+        assert!(script.contains("ubuntu_codename <- 'resolute'"));
+        assert!(script.contains("setwd(repo_path)"));
         assert!(script.contains("https://packagemanager.posit.co/cran/__linux__/%s/latest"));
         assert!(script.contains(
-            "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", 'resolute')"
+            "sprintf(\"https://packagemanager.posit.co/cran/__linux__/%s/latest\", ubuntu_codename)"
         ));
         assert!(script.contains("install.packages(\n      \"pak\""));
         assert!(script.contains("pak::pkg_install("));
@@ -883,8 +629,9 @@ mod tests {
         assert!(script.contains(
             "Parsing package metadata and dependency lists...\\nThis can take a few minutes for large revdep sets."
         ));
-        assert!(script.contains(&format!("async_http_total_con = {max_connections}")));
+        assert!(script.contains("async_http_total_con = max_connections"));
         assert!(script.contains("async_http_host_con = 50"));
+        assert!(script.contains("options(Ncpus = install_workers)"));
         assert!(script.contains("parse_description_dependencies <- function"));
         assert!(
             script.contains("dev_package_deps <- parse_description_dependencies(\"DESCRIPTION\"")
@@ -904,26 +651,55 @@ mod tests {
             "revdep_dir <- normalizePath(revdep_dir, winslash = \"/\", mustWork = TRUE)"
         ));
         assert!(script.contains("Skipping packages not available from repository"));
-        assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains(".libPaths(unique(c(library_dir, .libPaths())))"));
         assert!(script.contains("Installing %d packages with pak::pkg_install()..."));
     }
 
     #[test]
-    fn build_run_script_invokes_xfun() {
-        let path = Path::new("/tmp/example");
-        let pkgdepends_patch_path = Path::new("/tmp/patch-pkgdepends.R");
-        let p3m_state_path = Path::new("/tmp/p3m-rate-limit.rds");
-        let max_connections = util::optimal_max_connections(8);
-        let script = build_revdep_run_script(
-            path,
-            8,
-            max_connections,
-            pkgdepends_patch_path,
-            p3m_state_path,
-        )
-        .expect("script must build");
+    fn build_install_script_preserves_execution_order() {
+        let script = sample_install_script();
 
+        // Configuration precedes the prelude, which precedes the install body.
+        assert!(
+            position(&script, "repo_path <- '/tmp/example'")
+                < position(&script, "setwd(repo_path)")
+        );
+        assert!(
+            position(&script, "ubuntu_codename <- 'resolute'")
+                < position(&script, "# Prepare workspace directories ----")
+        );
+        assert!(
+            position(&script, "ensure_installed <- function")
+                < position(&script, "# Configure repositories ----")
+        );
+        // Within the body: repos, pak, patch, tooling, then installation.
+        assert!(
+            position(&script, "ensure_pak(source_repo)")
+                < position(&script, "source(pkgdepends_patch_path)")
+        );
+        assert!(
+            position(
+                &script,
+                "pak_patch_parallel_install(pkgdepends_patch_path, p3m_state_path)"
+            ) < position(&script, "ensure_installed(\"xfun\")")
+        );
+        assert!(
+            position(&script, "ensure_installed(\"xfun\")")
+                < position(&script, "pak_install_retry(install_targets)")
+        );
+    }
+
+    #[test]
+    fn build_run_script_invokes_xfun() {
+        let max_connections = util::optimal_max_connections(8);
+        let script = sample_run_script();
+
+        assert!(script.starts_with(CONFIG_HEADER));
+        assert!(script.contains("repo_path <- '/tmp/example'"));
+        assert!(script.contains("install_workers <- 8"));
+        assert!(script.contains(&format!("max_connections <- {max_connections}")));
+        assert!(!script.contains("ubuntu_codename"));
+        assert!(script.contains("setwd(repo_path)"));
         assert!(script.contains("xfun::rev_check"));
         assert!(script.contains("src = \".\""));
         assert!(script.contains("mc.cores = install_workers"));
@@ -943,7 +719,7 @@ mod tests {
         );
         assert!(script.contains("xfun_patch_p3m_downloads(p3m_state_path)"));
         assert!(script.contains("?ignore-build-errors&ignore-unavailable"));
-        assert!(script.contains(&format!("async_http_total_con = {max_connections}")));
+        assert!(script.contains("async_http_total_con = max_connections"));
         assert!(script.contains("async_http_host_con = 50"));
         assert!(script.contains("options("));
         assert!(script.contains("browser = \"false\""));
@@ -955,7 +731,6 @@ mod tests {
         assert!(script.contains("xfun.rev_check.sample = Inf"));
         assert!(script.contains("xfun.rev_check.keep_md = TRUE"));
         assert!(script.contains("xfun.rev_check.timeout_total = Inf"));
-        assert!(script.contains("setwd('/tmp/example')"));
         assert!(script.contains("library_dir <- file.path(revdep_dir, \"library\")"));
         assert!(script.contains(
             "library_dir <- normalizePath(library_dir, winslash = \"/\", mustWork = TRUE)"
@@ -963,19 +738,96 @@ mod tests {
     }
 
     #[test]
+    fn build_run_script_preserves_execution_order() {
+        let script = sample_run_script();
+
+        assert!(
+            position(&script, "repo_path <- '/tmp/example'")
+                < position(&script, "setwd(repo_path)")
+        );
+        assert!(
+            position(&script, "ensure_installed <- function")
+                < position(&script, "# Configure repositories ----")
+        );
+        assert!(
+            position(&script, "ensure_pak(source_repo)")
+                < position(&script, "source(pkgdepends_patch_path)")
+        );
+        assert!(
+            position(
+                &script,
+                "pak_patch_parallel_install(pkgdepends_patch_path, p3m_state_path)"
+            ) < position(&script, "ensure_installed(\"xfun\")")
+        );
+        assert!(
+            position(&script, "ensure_installed(\"rmarkdown\")")
+                < position(&script, "xfun_patch_p3m_downloads(p3m_state_path)")
+        );
+        assert!(
+            position(&script, "xfun_patch_p3m_downloads(p3m_state_path)")
+                < position(&script, "xfun.rev_check.compare = TRUE")
+        );
+        assert!(
+            position(&script, "xfun.rev_check.timeout_total = Inf")
+                < position(
+                    &script,
+                    "results <- xfun::rev_check(package_name, src = \".\")"
+                )
+        );
+    }
+
+    #[test]
+    fn install_and_run_scripts_share_rate_limit_state() {
+        let install = sample_install_script();
+        let run = sample_run_script();
+
+        for script in [&install, &run] {
+            assert!(script.contains("p3m_state_path <- '/tmp/p3m-rate-limit.rds'"));
+            assert!(script.contains(
+                "p3m_state_path <- normalizePath(p3m_state_path, winslash = \"/\", mustWork = TRUE)"
+            ));
+            assert!(
+                script
+                    .contains("pak_patch_parallel_install(pkgdepends_patch_path, p3m_state_path)")
+            );
+        }
+        assert!(run.contains("xfun_patch_p3m_downloads(p3m_state_path)"));
+        assert!(!install.contains("xfun_patch_p3m_downloads("));
+    }
+
+    #[test]
+    fn script_config_escapes_paths_and_clamps_counts() {
+        let config = script_config(
+            Path::new("/tmp/O'Reilly"),
+            0,
+            0,
+            Path::new("/tmp/patch.R"),
+            Path::new("/tmp/state.rds"),
+        );
+        let rendered = config.render();
+
+        assert!(rendered.contains("repo_path <- '/tmp/O\\'Reilly'"));
+        assert!(rendered.contains("install_workers <- 1\n"));
+        assert!(rendered.contains("max_connections <- 1\n"));
+        assert!(rendered.contains("pkgdepends_patch_path <- '/tmp/patch.R'"));
+        assert!(rendered.contains("p3m_state_path <- '/tmp/state.rds'"));
+    }
+
+    #[test]
     fn pkgdepends_patch_throttles_p3m_downloads_across_pak_and_xfun() {
-        assert!(PKGDEPENDS_PATCH.contains("P3M_REQUEST_LIMIT <- 1800L"));
-        assert!(PKGDEPENDS_PATCH.contains("P3M_WINDOW_SECONDS <- 5 * 60 + 5"));
-        assert!(PKGDEPENDS_PATCH.contains("patched_pkgplan_async_download_internal"));
-        assert!(PKGDEPENDS_PATCH.contains("P3M_REQUEST_LIMIT - state$used"));
-        assert!(PKGDEPENDS_PATCH.contains("async_delay(wait)$then("));
-        assert!(!PKGDEPENDS_PATCH.contains("\n          delay(wait)$then("));
-        assert!(PKGDEPENDS_PATCH.contains("p3m_rate_limit_record("));
-        assert!(PKGDEPENDS_PATCH.contains("xfun_patch_p3m_downloads <- function"));
-        assert!(PKGDEPENDS_PATCH.contains("original_download_tarball("));
-        assert!(PKGDEPENDS_PATCH.contains(") & !file.exists(expected)"));
+        let patch = r_scripts::PKGDEPENDS_PATCH;
+        assert!(patch.contains("P3M_REQUEST_LIMIT <- 1800L"));
+        assert!(patch.contains("P3M_WINDOW_SECONDS <- 5 * 60 + 5"));
+        assert!(patch.contains("patched_pkgplan_async_download_internal"));
+        assert!(patch.contains("P3M_REQUEST_LIMIT - state$used"));
+        assert!(patch.contains("async_delay(wait)$then("));
+        assert!(!patch.contains("\n          delay(wait)$then("));
+        assert!(patch.contains("p3m_rate_limit_record("));
+        assert!(patch.contains("xfun_patch_p3m_downloads <- function"));
+        assert!(patch.contains("original_download_tarball("));
+        assert!(patch.contains(") & !file.exists(expected)"));
         assert_eq!(
-            PKGDEPENDS_PATCH
+            patch
                 .matches("P3M request budget reached; resuming downloads in %.0f seconds.")
                 .count(),
             2

@@ -12,7 +12,11 @@ The core strategy in revdeprun is:
 - Prefer binaries wherever possible.
 - Keep going in the presence of missing or broken packages.
 
-All of this is implemented in `src/revdep.rs` as generated R scripts.
+All of this is implemented in the R scripts under `assets/r/`
+(`revdep-prelude.R`, `revdep-install.R`, and `revdep-run.R`), which
+`src/revdep.rs` embeds at compile time and assembles behind a generated
+configuration block. See the [script assembly](workflow.md#script-assembly)
+section of the workflow page for how the pieces fit together.
 
 ## Binary-first repositories
 
