@@ -1,0 +1,21 @@
+[project]
+r-version = "4.6.1"
+snapshot = "2026-10-02"
+strict = false
+
+[vendor]
+path = "deps-src"
+include-tests = true
+exclude = []
+gitignore = true
+
+[manifest]
+agents-file = false
+
+[packages]
+xfun = "*"
+pak = "*"
+revdepcheck = "r-lib/revdepcheck"
+
+[references]
+xshell = "matklad/xshell"

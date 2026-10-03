@@ -1,6 +1,6 @@
 /target
 
-/reference/
+/deps-src/
 
 # Zensical site
 pyproject.toml
