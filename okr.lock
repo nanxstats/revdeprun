@@ -1,0 +1,41 @@
+version = 2
+okr-version = "0.1.10"
+generated = "2026-10-02T00:00:00Z"
+snapshot = "2026-10-02"
+config-digest = "sha256:847826ac3c1d721635163dd97cf245ebd987bdb119db39cbd6f79c84d1634dab"
+environment-digest = "sha256:a2bb4bd4b9e1a81a3ccc600b37947508efdc98d614c706edc8c9c2bb8d921181"
+
+[[package]]
+name = "pak"
+version = "0.11.1"
+source = "cran"
+url = "https://packagemanager.posit.co/cran/2026-10-02/src/contrib/pak_0.11.1.tar.gz"
+fetch-method = "tarball"
+tree-digest = "sha256:79b79b0a6b76400595ce9f816f54926b3124c4897ad2d5c9dd673bd0009fc786"
+license = "GPL-3"
+
+[[package]]
+name = "revdepcheck"
+version = "1.0.0.9002"
+source = "github::r-lib/revdepcheck"
+commit = "fe363843c340191f56aaf03514af4301f2ccf5c1"
+fetch-method = "forge-tarball"
+tree-digest = "sha256:9d986b6e8f715546936d6daca2ad484b587f4897316bc10f1c1d5881fe54f853"
+license = "MIT + file LICENSE"
+
+[[package]]
+name = "xfun"
+version = "0.61"
+source = "cran"
+url = "https://packagemanager.posit.co/cran/2026-10-02/src/contrib/xfun_0.61.tar.gz"
+fetch-method = "tarball"
+tree-digest = "sha256:7b9415eb976bd2ca5063d853e9755a00b0491cd19c4d32447f6b607656859217"
+license = "MIT + file LICENSE"
+
+[[reference]]
+name = "xshell"
+source = "github::matklad/xshell"
+commit = "52f71bac326aaac291d07146ea790ad886dd8131"
+fetch-method = "forge-tarball"
+tree-digest = "sha256:57ae3cdf4b5d723af294b791c8b555e453438238821ed269de3763e0b5b4558f"
+license = "Apache-2.0"

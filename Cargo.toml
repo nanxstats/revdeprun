@@ -13,6 +13,10 @@ categories = ["command-line-utilities", "development-tools"]
 authors = ["Nan Xiao <me@nanx.me>"]
 exclude = [
     "AGENTS.md",
+    ".github",
+    "deps-src",
+    "okr.toml",
+    "okr.lock",
     "pyproject.toml",
     "uv.lock",
     ".python-version",
