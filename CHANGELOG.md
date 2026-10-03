@@ -1,14 +1,12 @@
 # Changelog
 
-## revdeprun (development version)
+## revdeprun 2.4.0
 
 ### New features
 
-- Add a `revdeprun bundle` subcommand (#186).
-
-    The command bundles the results left behind by `xfun::rev_check()` into a
-    single zstd-compressed tar archive, so they can be moved off a cloud
-    instance for review as soon as the check finishes.
+- Add a `revdeprun bundle` subcommand (#186). The command bundles the results
+  left behind by `xfun::rev_check()` into a single zstd-compressed tar archive,
+  so they can be copied off a cloud instance for review as soon as the check finishes.
 
 ### Improvements
 
